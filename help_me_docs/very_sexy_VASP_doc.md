@@ -2,13 +2,21 @@
 - [What is a hybrid functional?](https://www.vasp.at/wiki/index.php/Category:Hybrid_functionals)
 - [How the hell do I include a hybrid functional in my INCAR](https://www.vasp.at/wiki/index.php/List_of_hybrid_functionals)
 
-# INCAR Tags
+# Choosing the right INCAR tags
 A full list of INCAR tags can be found [here](https://www.vasp.at/wiki/index.php?title=Category:INCAR_tag&pageuntil=LREAL#mw-pages).
-- `SIGMA`: 0.03 if system unknown (metal, cond, semicond), insulators/semiconductors = 0.1, metals = 0.05
-- `ISTART`: 0 if new job, 1 for continuation jobs (i.e. band structure and DOS, which obtain CHGCAR from the SCF calculation)
-- `IBRION`: difficult relaxation problems it is recommended to use the conjugate gradient algorithm (IBRION=2), which presently possesses the most reliable backup routines. IBRION = -1, The ions are not moved, but NSW outer loops are performed. In each outer loop the electronic degrees of freedom are re-optimized (for NSW>0 this obviously does not make much sense, except for test purposes). If no ionic update is required use NSW=0 instead
-- `ISYM`: whether or not to enforce symmetry upon relaxation. If the desired symmetry is known (i.e. IISF = 2 IBRION = 2), then use ISIF 1 | 2 (2 is more efficiently parallelized). If the desired symmetry is not known (i.e. ISIF = 3), then use ISYM = 0.
-- `EDIFFG`: when positive, this is the condition to break the ionic relaxation loop when the change in energy is < EDIFF. When negative, this is the break condition when the total net force on an atom is < |EDIFFG|. A good rule of thumb is to select -EDIFFG no larger than 0.05 ev/Å, though in many cases this may be entirely too large, especially for flexible materials. MOF materials often use 0.03 eV/Å, whereas many recommend using 0.01 eV/Å. For vibrational calculations however, smaller forces on the atoms may have to be used instead, though this can greatly increase the computational time. 0.001 eV/Å is more than low enough for phonon calculations, but will certainly take much longer.
+
+### `EDIFFG`
+when positive, this is the condition to break the ionic relaxation loop when the change in energy is < EDIFF. When negative, this is the break condition when the total net force on an atom is < |EDIFFG|. A good rule of thumb is to select -EDIFFG no larger than 0.05 ev/Å, though in many cases this may be entirely too large, especially for flexible materials. MOF materials often use 0.03 eV/Å, whereas many recommend using 0.01 eV/Å. For vibrational calculations however, smaller forces on the atoms may have to be used instead, though this can greatly increase the computational time. 0.001 eV/Å is more than low enough for phonon calculations, but will certainly take much longer.
+### `ENCUT`
+ENCUT is the energy cutoff when running a VASP calculation. By default, ENCUT is determined by the ENMAX (or ENMIN, whichever is larger) defined in the POTCAR file. Often, it is sufficient for ENCUT to be set at 1.3 * max([list of ENMAX and ENMIN from the POTCAR]).
+### `IBRION`
+difficult relaxation problems it is recommended to use the conjugate gradient algorithm (IBRION=2), which presently possesses the most reliable backup routines. IBRION = -1, The ions are not moved, but NSW outer loops are performed. In each outer loop the electronic degrees of freedom are re-optimized (for NSW>0 this obviously does not make much sense, except for test purposes). If no ionic update is required use NSW=0 instead
+### `ISTART`
+0 if new job, 1 for continuation jobs (i.e. band structure and DOS, which obtain CHGCAR from the SCF calculation)
+### `ISYM`
+whether or not to enforce symmetry upon relaxation. If the desired symmetry is known (i.e. IISF = 2 IBRION = 2), then use ISIF 1 | 2 (2 is more efficiently parallelized). If the desired symmetry is not known (i.e. ISIF = 3), then use ISYM = 0.
+### `SIGMA`
+0.03 if system unknown (metal, cond, semicond), insulators/semiconductors = 0.1, metals = 0.05
 
 
 # Relaxations
