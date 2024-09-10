@@ -1,6 +1,6 @@
 # SolidState-dont-Evaporate
 
-Aha, seems like you've caught me in my element! Yes I know I'm usually evaporating because something's difficult or I'm just shocked and want to evaporate into the ether, but don't catch me lackin when I'm doing solid state physics ;)
+S O L I D S T A T E P H Y S I C S
 
 # Required packages
 - [pymatgen](https://pymatgen.org/installation.html) - analyzing material structures, VASP outputs, and plotter modules
