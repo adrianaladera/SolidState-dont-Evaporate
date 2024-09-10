@@ -1,4 +1,5 @@
-from utils import electronic_structure   
+from utils import ElectronicStructure   
+# from packages import Tools, Matplotlib, Pymatgen
 from utils.packages import * 
 
 def color_bs_dos_plotter(
@@ -78,7 +79,7 @@ def color_bs_dos_plotter(
     a1.legend(loc='upper right', fontsize=20)
 
     ################### Plotting the band structure ###############
-    elements = electronic_structure.sort_elements(f"{path}/band/POSCAR")
+    elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
     inorganics = elements[0]
     organics = elements[1]
     group_dict = [{'elements':inorganics,'color':[255, 70, 70]},{'elements':organics,'color':[0,0,0]}]
@@ -94,8 +95,8 @@ def color_bs_dos_plotter(
         projections = bs.get_projection_on_elements()
         
         # Get projections into matrix form and order of elements in projections
-        proj_array = electronic_structure.projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
-        elem_keys = list(electronic_structure.get_element_projection_keys(projections)) # [n_elements]
+        proj_array = ElectronicStructure.projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
+        elem_keys = list(ElectronicStructure.get_element_projection_keys(projections)) # [n_elements]
 
         # Get groups and colors from group_dict
         color_matrix = np.array([np.array(g["color"]) for g in group_dict]) # [n_group, rgb]
@@ -142,8 +143,11 @@ def color_bs_dos_plotter(
         xticks = bandz.get_ticks()
         labels = xticks["label"]
         print("BAND LABELS:")
+        
+        band_labels = {}
         for i, l in enumerate(labels):
-            print(i, l)
+            band_labels[i] = l
+        print(band_labels)
 
         for i, sp in enumerate(bs.bands):
             ls = "-" if str(sp) == "1" else "--"
@@ -497,7 +501,7 @@ def color_bs_plotter(
     fuck, ax = plt.subplots(1, figsize=(12,8), dpi=600)
     vbm_line, cbm_line = None, None
 
-    elements = electronic_structure.sort_elements(f"{path}/band/POSCAR")
+    elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
     inorganics = elements[0]
     organics = elements[1]
     group_dict = [{'elements':inorganics,'color':[255, 70, 70]},{'elements':organics,'color':[0,0,0]}]
@@ -513,8 +517,8 @@ def color_bs_plotter(
         projections = bs.get_projection_on_elements()
         
         # Get projections into matrix form and order of elements in projections
-        proj_array = electronic_structure.projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
-        elem_keys = list(electronic_structure.get_element_projection_keys(projections)) # [n_elements]
+        proj_array = ElectronicStructure.projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
+        elem_keys = list(ElectronicStructure.get_element_projection_keys(projections)) # [n_elements]
 
         # Get groups and colors from group_dict
         color_matrix = np.array([np.array(g["color"]) for g in group_dict]) # [n_group, rgb]
