@@ -119,7 +119,7 @@ def band_incar(potcar_path, write_path, ishybrid=False,
         os.system(command)
         output = os.popen(command).read();
         energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
-        params["ENCUT"] = max(energy_vals)
+        params["ENCUT"] = 1.3 * max(energy_vals)
 
         if ishybrid:
             params["LHFCALC"] = ".TRUE." 
@@ -134,6 +134,58 @@ def band_incar(potcar_path, write_path, ishybrid=False,
 
         print("Band INCAR written")
 
+def dos_incar(potcar_path, write_path, ishybrid=False,
+               algo=None, prec=None, npar=None, ncore=None, 
+             kpar=None, lreal=None, ismear=None, sigma=None):
+    '''MUST have the outcar path of scf_band
+    write_path - must be a directory called scf_band'''
+    ass = True
+    if ass is True:
+        params = {
+        "ALGO": algo if algo is not None else "Normal",
+        "PREC": prec if prec is not None else "Accurate",
+        "NPAR": npar if npar is not None else 8,
+        "NCORE": ncore if ncore is not None else 8,
+        "KPAR": kpar if kpar is not None else 2,
+        "LREAL": lreal if lreal is not None else "Auto",
+        "IMSEAR": ismear if ismear is not None else 0,
+        "SIGMA": sigma if sigma is not None else 0.03
+        }
+
+        params["NELM"] = 250
+        params["NELMIN"] = 4
+        params["ISTART"] = 1    
+        params["EDIFF"] = 1e-6
+        params["EDIFFG"] = 1e-4
+        params["ISIF"] = 2 
+        params["NSW"] = 0
+        params["IBRION"] = -1
+        params["ISYM"] = 2
+        params["ICHARG"] = 11
+        params["LORBIT"] = 11
+        params["NEDOS"] = 2000
+
+        command = f"grep \"ENMAX\" {potcar_path}"
+        os.system(command)
+        output = os.popen(command).read();
+        energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
+        params["ENCUT"] = 1.3 * max(energy_vals)
+
+        if ishybrid:
+            params["LHFCALC"] = ".TRUE." 
+            params["GGA"]     = "B3"
+            params["AEXX"]    = 0.2
+            params["AGGAX"]   = 0.72 
+            params["AGGAC"]   = 0.81 
+            params["ALDAC"]   = 0.19
+
+        incar = Incar.from_dict(params)
+        if not os.path.exists(f"{write_path}/dos"):
+            os.mkdir(f"{write_path}/dos")
+            incar.write_file(f"{write_path}/dos/INCAR")
+
+        print("Density of States INCAR written")
+
 
 def make_potcar(path):
     '''Creates a potcar by concatenating all the pseudoponetials
@@ -142,7 +194,7 @@ def make_potcar(path):
             to the same directory as the POSCAR.'''
     potcar_dir = "/Users/adrianaladera/Desktop/MIT/research/POTCARS_PBE.54/"
 
-    with open("{}/POSCAR".format(path), 'r') as f:
+    with open(f"{path}/POSCAR", 'r') as f:
         lines = f.readlines()
         command = "cat "
 
@@ -153,10 +205,10 @@ def make_potcar(path):
     f.close()
     print("POTCAR written")
 
-def scf_band_incar(potcar_path, write_path, algo=None, prec=None, npar=None, ncore=None, 
+def scf_incar(write_path, lwave=False, algo=None, prec=None, npar=None, ncore=None, 
              kpar=None, lreal=None, ismear=None, sigma=None):
-    '''Must be called after scf_band/ is created.'''
-    if "POTCAR" in potcar_path:
+    '''Must be called after scf is created.'''
+    if os.path.exists(f"{write_path}/POTCAR"):
         params = {
             "ALGO": algo if algo is not None else "Normal",
             "PREC": prec if prec is not None else "Accurate",
@@ -164,6 +216,7 @@ def scf_band_incar(potcar_path, write_path, algo=None, prec=None, npar=None, nco
             "NCORE": ncore if ncore is not None else 8,
             "KPAR": kpar if kpar is not None else 2,
             "LREAL": lreal if lreal is not None else "Auto",
+            "LWAVE": lwave if lwave is not True else True,
             "IMSEAR": ismear if ismear is not None else 0,
             "SIGMA": sigma if sigma is not None else 0.03
         }
@@ -178,16 +231,58 @@ def scf_band_incar(potcar_path, write_path, algo=None, prec=None, npar=None, nco
         params["IBRION"] = -1
         params["ISYM"] = 2
 
-        command = f"grep \"ENMAX\" {potcar_path}"
+        command = f"grep \"ENMAX\" {write_path}/POTCAR"
         os.system(command)
         output = os.popen(command).read();
         energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
-        params["ENCUT"] = max(energy_vals)
+        params["ENCUT"] = 1.3 * max(energy_vals)
 
         incar = Incar.from_dict(params)
         incar.write_file(f"{write_path}/INCAR")
 
-        print("scf_band INCAR written")
+        print("Self-consistent field (SCF) INCAR written")
 
     else:
-        print(f"POTCAR not read from the path {potcar_path}.")
+        print(f"{write_path}/POTCAR does not exist.")
+
+def relax_incar(write_path, isif, nsw, ibrion, isym, ivdw=False, lwave=False,
+              algo=None, prec=None, npar=None, ncore=None, 
+             kpar=None, lreal=None, ismear=None, sigma=None):
+    '''Must be called after scf is created.'''
+    if os.path.exists(f"{write_path}/POTCAR"):
+        params = {
+            "ALGO": algo if algo is not None else "Normal",
+            "PREC": prec if prec is not None else "Accurate",
+            "NPAR": npar if npar is not None else 8,
+            "NCORE": ncore if ncore is not None else 8,
+            "KPAR": kpar if kpar is not None else 2,
+            "LREAL": lreal if lreal is not None else "Auto",
+            "LWAVE": lwave if lwave is not False else False,
+            "IMSEAR": ismear if ismear is not None else 0,
+            "SIGMA": sigma if sigma is not None else 0.03,
+            "IVDW": ivdw if ivdw is not False else 0
+        }
+        
+        params["NELM"] = 250
+        params["NELMIN"] = 4
+        params["ISTART"] = 0    
+        params["EDIFF"] = 1e-5
+        params["EDIFFG"] = -0.01
+        params["ISIF"] = isif # CHANGE ME
+        params["NSW"] = nsw
+        params["IBRION"] = ibrion
+        params["ISYM"] = isym
+
+        command = f"grep \"ENMAX\" {write_path}/POTCAR"
+        os.system(command)
+        output = os.popen(command).read();
+        energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
+        params["ENCUT"] = 1.3 * max(energy_vals)
+
+        incar = Incar.from_dict(params)
+        incar.write_file(f"{write_path}/INCAR")
+
+        print("Relaxation INCAR written")
+
+    else:
+        print(f"{write_path}/POTCAR does not exist.")
