@@ -13,11 +13,11 @@ A full list of INCAR tags can be found [here](https://www.vasp.at/wiki/index.php
 
 # Relaxations
 ## Notes
+### Pulay stress (not `Poulet stress` we are not stressint out any chickens or PETA will appear)
 The Pulay stress arises from the fact that the plane-wave basis set is not complete with respect to changes in the volume. Thus, unless absolute convergence with respect to the basis set has been achieved; the diagonal components of the stress tensor are incorrect. This error is often called "Pulay stress". Pulay stress can be ignored if the relaxation is volume-conserving, but if it is not, then the structure needs to COMPLETELY RELAX at least 3 times to reduce Pulay stress error (i.e. the "reached required accuracy - stopping structural energy minimisation" message appears).
 
   
-## Converging structures
-## Notes
+### Converging structures
 The relaxation can meet the required EDIFF and EDIFFG energetics convergence criteria, but it is crucial to check the convergence of forces per atom on the structure. A good convergence criteria is 1 meV-- anything larger means the structure is unhappy. This is especially true if forces are large on the inorganic structure, because then it is very unhappy (it's okay if the ligands are a little unhappy because honestly when are they ever happy).
 
 CONVERGING EXPERIMENTAL STRUCTURES: Sometimes, an experimental structure can be relaxed with just ISIF = 2 and selective dynamics on the hydrogens. However, when the total force in eV/Å > 0.01 eV, especially on the atoms composing the inorganic structure, then further relaxation is required. Often, this can be resolved by maintaining the unit cell but removing selective dynamics such that all of the atoms in the structure are now relaxing. This can help to reduce the force stress per atom.
@@ -28,7 +28,7 @@ CONVERGING EXPERIMENTAL STRUCTURES: Sometimes, an experimental structure can be 
 - [Example of creating a cubic diamond Si band structure using VASP and Pymatgen](https://ma.issp.u-tokyo.ac.jp/en/app-post/1146) 
 - [Band structure using hybrid functionals](https://www.vasp.at/wiki/index.php/Band-structure_calculation_using_hybrid_functionals)
 
-## Notes
+## A good band structure
 To create a good band structure, you need the same NBANDS and ENCUT as grepped from the OUTCAR of the SCF calculation of the post-relaxed structure. Be sure to run an SCF calculation with IBRION=-1 and ISMEAR=0 to obtain a good CHGCAR and CHG for the bandstructure calculation. The SCF calculation must be run on the primitive unit cell for the band structure otherwise it will throw an error for the charge density!
 
 # Partial charge densities
@@ -43,7 +43,7 @@ To create a good band structure, you need the same NBANDS and ENCUT as grepped f
 - [Projected DOS by orbital](https://gist.github.com/lan496/ee0bd7a52df99029ac0aacbe69f2bf57)
 - [DOS with hybrid functionals](https://www.vasp.at/wiki/index.php/Fcc_Ni_DOS_with_hybrid_functional)
 
-## Notes
+## Avoiding error
 Make sure that the ENCUT value in the DOS INCAR is set to the same as the ENCUT value in the OUTCAR of the SCF calculation, otherwise you may get an error stating that the "dimensions on CHGCAR file are different" or that the calculation cannot read a charge density of a file greater than ICHARG>10.
 
 # Phonon calculations with Phonopy
