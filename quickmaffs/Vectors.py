@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 def get_components(c0, c1):
     '''Parameters:
@@ -23,3 +24,13 @@ def replace_coords(v, c0):
         Returns: 
         - updated coordinates of atom that will replace current atom'''
     return v + c0
+
+def angle_between_vectors(u, v):
+    dot_product = sum(i*j for i, j in zip(u, v))
+    norm_u = math.sqrt(sum(i**2 for i in u))
+    norm_v = math.sqrt(sum(i**2 for i in v))
+    cos_theta = dot_product / (norm_u * norm_v)
+    angle_rad = math.acos(cos_theta)
+    angle_deg = math.degrees(angle_rad)
+
+    return angle_deg

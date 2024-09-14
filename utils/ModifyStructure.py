@@ -1,5 +1,5 @@
 from pymatgen.core import Lattice, Structure, Site, IStructure
-from quick_maffs import Vectors
+from quickmaffs import Vectors
 import numpy as np
 import os
 import ase.geometry
@@ -9,59 +9,48 @@ import numpy as np
 import os
 from ase.io import read, write
 
-def just_the_inorganic(structure):
-    '''saves just the inorganic components of a structure to a file
-        - structure: pymatgen.core.structure object
-        - dest: where to save the file to'''
-    inorganics_list = ["Au", "Cu", "Ag", "S", "Te", "Se"]
-    rm_list = []
-
-    for a in range(len(structure)):
-        if str(structure[a].species)[:-1] not in inorganics_list and str(structure[a].species)[:-1] not in rm_list:
-            rm_list.append(str(structure[a].species)[:-1])
-    
-    for r in rm_list:
-        structure.remove_species(species=r)
-
-    return structure
-
-def replace_ligand_with_H(dest, structure, removals, temp_site):
+def replace_ligand_with_H(dest, mocha):
     '''Replaces the ligand at the chalcogen site with a H. 
         Purpose is to isolate the inorganic interaction of the 
-        structure at the band gap. 
+        MOCha at the band gap. 
         dest - where to store final file
-        structure - Pymatgen Structure object
-        removals - list of strings in which each string are the species
-        that make up the ligand
-        temp_site - site that will be replaced with a hydrogen at the
-        appropriate distance from the calchogen'''
-
-    chalcogens = ['Se', 'Te', 'S']
+        mocha - Pymatgen Structure object'''
 
     # distance in Angstrom between the given chalcogen and a hydrogen
     chalcogen_hydrogen_distances = {'Se': 1.46, 'S': 1.3, 'Te': 1.68}
+    chalcogen_carbon_dstances = {'Se': 1.96, 'S': 1.83, 'Te': 2.16}
 
-    # removing atoms that make up ligand
-    for r in removals:
-        structure.remove_species(species=r)
+    all_inorganics = ["Cu", "Au", "Ag", "S", "Te", "Se"]
 
-    for a in range(len(structure)):
-        if str(structure[a].species) == f"{temp_site}1":    
-            print(str(structure[a].species))
-            coordz = structure[a].coords
-            neighbors = structure.get_neighbors(site = structure[a], r = 2.8)
-            for n in neighbors:
-                print(n.species)
-                if str(n.species)[:-1] in chalcogens:
-                    print("your mom")
-                    curr_vector = get_components(n.coords, structure[a].coords) # current distance in Å
-                    new_vector = replace_distance(curr_vector, chalcogen_hydrogen_distances[str(n.species)[:-1]]) # desired length in Å
+    species = set([str(s.symbol) for s in mocha.species])
+
+    inorganics = list(set(all_inorganics).intersection(species))
+    organics = list(set(species) - set(inorganics))
+
+    for atom in mocha:
+        if str(atom.specie) in chalcogen_hydrogen_distances.keys():
+            neighbors = mocha.get_neighbors(site = atom, r = chalcogen_carbon_dstances[str(atom.specie)]+0.25)
+            if len(neighbors) > 1:
+                print("Warning: There is more than one C atom found neighboring your chalcogen. Be sure that there is only one C atom you're looking for!")
+            curr_vector = Vectors.get_components(atom.coords, neighbors[0].coords) # current distance in Å
+            new_vector = Vectors.replace_distance(curr_vector, chalcogen_hydrogen_distances[str(atom.specie)]) # desired length in Å
     
-                    # replace atoms with temp species not already in molecule
-                    structure.replace(idx=a, species='H', coords=replace_coords(new_vector, n.coords), coords_are_cartesian=True)
+            # replace atoms with temp species not already in molecule
+            mocha.replace(idx=neighbors[0].index, species='Po', coords=Vectors.replace_coords(new_vector, atom.coords), coords_are_cartesian=True)
 
-    structure.to(filename = f"{dest}/inorganic-with-H.cif") # write to file
-    print(f"file written to {dest}/inorganic-with-H.cif")   
+    #removing atoms that make up ligand
+    for o in organics:
+        mocha.remove_species(species=o)
+
+    for i, atom in enumerate(mocha):
+        if str(atom.specie) == "Po":
+            mocha.replace(idx=i, species='H')
+
+    mocha.to(filename = f"{dest}/inorganic-with-H.cif") # write to file
+    struct = Structure.from_file(f"{dest}/inorganic-with-H.cif")
+    poscar = Poscar(struct)
+    poscar.write_file(f"{dest}/inorganic-with-H.vasp")
+    os.system(f"rm {dest}/inorganic-with-H.cif") 
 
 def remove_dupes(structure):
     '''Removes duplicates from a structure
@@ -74,36 +63,68 @@ def remove_dupes(structure):
 
     return structure 
 
-def selective_dynamics(yourmom, species):
+def selective_dynamics(structure, species):
     '''Adds selective dynamics to desired species
-        - yourmom: pymatgen.core.structure object
-        - filename: str filename to save Structure object
+        - structure: pymatgen.core.structure object
+        - savepath: str filename to save Structure object
         - species: list of strings; species to add selective dynamics'''
     
     select_dicks = []
 
-    for ass in range(len(yourmom)):
-        if str(yourmom[ass].species)[:-1] in species:
+    for ass in range(len(structure)):
+        if str(structure[ass].specie) in species:
             select_dicks.append([True, True, True])
         else:
             select_dicks.append([False, False, False])
     # convert to poscar
-    pos = Poscar(yourmom, selective_dynamics=select_dicks)
+    pos = Poscar(structure, selective_dynamics=select_dicks)
 
     return pos
 
 def remove_species(structure, species):
     '''saves just the inorganic components of a structure to a file
-        - structure: pymatgen.core.structure object
-        - dest: where to save the file to
+        - mocha: pymatgen.core.Structure object
         - species: string list of species to remove from Structure'''
     
     for s in species:
         structure.remove_species(species=s)
-
-    return structure
     
+    return structure
 
 def find_unit_cell(supercell):
+    '''If you have a supercell, get the basic primitive structure
+        (unit cell)
+        
+        - supercell: pymatgen.core.Structure'''
+    
     unit_cell = supercell.get_primitive_structure()
     return unit_cell
+
+def modify_lattice(path, dest, file, lattice):
+    '''Updates the unit cell of the current .xyz file and saves in .vasp format
+    
+        - path: the path to the POSCAR
+        - dest: where the final converted file will be saved
+        - file: name of the .xyz file to be converted
+        - lattice: if a 1D array, then lattice will be constructed from parameters
+                    a, b, c, alpha, beta, gamma. If 2D, then lattice will be constructed
+                    from the given 2D matrix.'''
+    if os.path.exists(f'{path}{file}'):
+        old_struct = read(f'{path}{file}') 
+        structure = remove_dupes(old_struct)
+        
+        if len(np.array(lattice).shape) == 1: # from 1D array
+            lattice = Lattice.from_parameters(lattice[0],lattice[1],lattice[2],lattice[3],lattice[4],lattice[5]) 
+            matrix = np.array(lattice)
+
+            new_lattice = Lattice(np.array([matrix[0] - matrix[3],
+                                            matrix[1] - matrix[3],
+                                            matrix[2] - matrix[3]]))
+            structure.set_cell(new_lattice.matrix)  
+
+        else: # from 2D array
+            structure.set_cell(lattice) 
+        
+        write(f"{dest}{file[:-4]}.vasp", structure)
+        print(f"Updating unit cell of {file} and writing to *.vasp\n")
+        print(f"Written to:\n\n{dest}{file[:-4]}.vasp")

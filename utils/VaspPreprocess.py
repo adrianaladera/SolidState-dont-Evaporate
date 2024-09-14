@@ -43,7 +43,7 @@ def regular_kpoints(path, structure, factor=None, mesh_type=None):
     print("Regular KPOINTS written")
 
 
-def band_kpoints(struct, path, ishybrid=False):
+def band_kpoints(struct, path, kpath_type='s',ishybrid=False):
     ''' structure - pymatgen.core.Structure object
         path - path where the band/ and scf_band/ directories
                 will be created
@@ -60,7 +60,8 @@ def band_kpoints(struct, path, ishybrid=False):
     pos.write_file(f"{path}/band/POSCAR")
     pos.write_file(f"{path}/scf_band/POSCAR")
 
-    x = input("\nChoose high-symmetry k-path convention (methods can be found on https://pymatgen.org/pymatgen.symmetry.html#module-pymatgen.symmetry.kpath):\n\nl: Latimer-Munro\ns: Setyawan-Curtarolo\nh: Hinuma\n\nYour option: ")
+    # x = input("\nChoose high-symmetry k-path convention (methods can be found on https://pymatgen.org/pymatgen.symmetry.html#module-pymatgen.symmetry.kpath):\n\nl: Latimer-Munro\ns: Setyawan-Curtarolo\nh: Hinuma\n\nYour option: ")
+    x = kpath_type
     if x == 'l':
         kpath = KPathLatimerMunro(prim_struct)
     elif x == 's':
@@ -72,7 +73,7 @@ def band_kpoints(struct, path, ishybrid=False):
         kpath = KPathLatimerMunro(prim_struct)
 
     if kpath.kpath is not None:
-        kpts = Kpoints.automatic_linemode(divisions=10,ibz=kpath)
+        kpts = Kpoints.automatic_linemode(divisions=6,ibz=kpath)
         if ishybrid:
             kpts.write_file(f"{path}/band/KPOINTS_OPT")
             os.system(f"cp {path}/scf/KPOINTS {path}/band/KPOINTS")
@@ -83,7 +84,7 @@ def band_kpoints(struct, path, ishybrid=False):
     
     
     else:
-        print("kpath is empty! You may have to determine the spacegroup manually.")
+        print("kpath is empty! You may have to determine the spacegroup manually:")
     
 def band_incar(potcar_path, write_path, ishybrid=False,
                algo=None, prec=None, npar=None, ncore=None, 
@@ -118,7 +119,7 @@ def band_incar(potcar_path, write_path, ishybrid=False,
         command = f"grep \"ENMAX\" {potcar_path}"
         os.system(command)
         output = os.popen(command).read();
-        energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
+        energy_vals = [float(i) for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
         params["ENCUT"] = 1.3 * max(energy_vals)
 
         if ishybrid:
@@ -168,7 +169,7 @@ def dos_incar(potcar_path, write_path, ishybrid=False,
         command = f"grep \"ENMAX\" {potcar_path}"
         os.system(command)
         output = os.popen(command).read();
-        energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
+        energy_vals = [float(i) for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
         params["ENCUT"] = 1.3 * max(energy_vals)
 
         if ishybrid:
@@ -234,7 +235,7 @@ def scf_incar(write_path, lwave=False, algo=None, prec=None, npar=None, ncore=No
         command = f"grep \"ENMAX\" {write_path}/POTCAR"
         os.system(command)
         output = os.popen(command).read();
-        energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
+        energy_vals = [float(i) for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
         params["ENCUT"] = 1.3 * max(energy_vals)
 
         incar = Incar.from_dict(params)
@@ -276,7 +277,7 @@ def relax_incar(write_path, isif, nsw, ibrion, isym, ivdw=False, lwave=False,
         command = f"grep \"ENMAX\" {write_path}/POTCAR"
         os.system(command)
         output = os.popen(command).read();
-        energy_vals = [i for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
+        energy_vals = [float(i) for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
         params["ENCUT"] = 1.3 * max(energy_vals)
 
         incar = Incar.from_dict(params)
