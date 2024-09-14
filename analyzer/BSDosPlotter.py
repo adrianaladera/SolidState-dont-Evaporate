@@ -20,7 +20,7 @@ def color_bs_dos_plotter(
     savefig=True
 ):
     """
-    Color plot grouping by Tess Smidt, modified by Adriana Ladera. 
+    By Tess Smidt and Adriana Ladera. 
     Dos Plotter by Adriana Ladera.
     Get a matplotlib object for the bandstructures plot.
     Multiple bandstructure objs are plotted together if they have the
@@ -478,7 +478,7 @@ def color_bs_plotter(
     savefig=True
 ):
     """
-    Color plot grouping by Tess Smidt, modified by Adriana Ladera. 
+    By Tess Smidt and Adriana Ladera. 
     Dos Plotter by Adriana Ladera.
     Get a matplotlib object for the bandstructures plot.
     Multiple bandstructure objs are plotted together if they have the
