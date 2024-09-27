@@ -287,3 +287,24 @@ def relax_incar(write_path, isif, nsw, ibrion, isym, ivdw=False, lwave=False,
 
     else:
         print(f"{write_path}/POTCAR does not exist.")
+
+
+def run_cpu(structure, destination, hours=19, cpu=1):
+    s = f'''#!/bin/bash
+    
+#SBATCH -A m4064
+#SBATCH -N {cpu}
+#SBATCH -c 128
+#SBATCH -C cpu
+#SBATCH -q regular
+#SBATCH -t {hours}:00:00
+#SBATCH -J {structure}
+#SBATCH -o job.out
+#SBATCH -e job.err
+
+module load vasp/6.4.1-cpu
+
+srun vasp_std'''
+    f = open(f"{destination}/run.slurm", 'w')
+    f.write(s)
+    f.close()

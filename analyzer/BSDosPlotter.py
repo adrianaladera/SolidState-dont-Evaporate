@@ -467,6 +467,7 @@ def color_bs_plotter(
     path,
     bandz,
     zero_to_efermi=True,
+    xlim=None,
     ylim=None,
     smooth=False,
     vbm_cbm_marker=True,
@@ -666,6 +667,16 @@ def color_bs_plotter(
             ax.set_ylim(ll + e_min, hh + e_max)
     else:
         ax.set_ylim(ylim)
+
+    if xlim is None:
+        x_min_range = xticks['distance'][0]
+        x_max_range = xticks['distance'][-1]
+    else:
+        x_min_range = xticks['distance'][xlim[0]]
+        x_max_range = xticks['distance'][xlim[1]]
+    ax.set_xlim(x_min_range,x_max_range)
+
+
 
     ax.set_xticks(xticks['distance'])
     ax.set_xticklabels(xticks['label'], fontsize=20)
