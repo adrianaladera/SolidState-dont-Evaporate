@@ -9,7 +9,7 @@ import numpy as np
 import os
 from ase.io import read, write
 
-def replace_ligand_with_H(dest, mocha):
+def replace_ligand_with_H(dest, mocha, tolerance=0.25):
     '''Replaces the ligand at the chalcogen site with a H. 
         Purpose is to isolate the inorganic interaction of the 
         MOCha at the band gap. 
@@ -27,30 +27,38 @@ def replace_ligand_with_H(dest, mocha):
     inorganics = list(set(all_inorganics).intersection(species))
     organics = list(set(species) - set(inorganics))
 
+    notempty = False
     for atom in mocha:
         if str(atom.specie) in chalcogen_hydrogen_distances.keys():
-            neighbors = mocha.get_neighbors(site = atom, r = chalcogen_carbon_dstances[str(atom.specie)]+0.25)
+            neighbors = mocha.get_neighbors(site = atom, r = chalcogen_carbon_dstances[str(atom.specie)]+tolerance)
             if len(neighbors) > 1:
                 print("Warning: There is more than one C atom found neighboring your chalcogen. Be sure that there is only one C atom you're looking for!")
-            curr_vector = Vectors.get_components(atom.coords, neighbors[0].coords) # current distance in Å
-            new_vector = Vectors.replace_distance(curr_vector, chalcogen_hydrogen_distances[str(atom.specie)]) # desired length in Å
-    
-            # replace atoms with temp species not already in molecule
-            mocha.replace(idx=neighbors[0].index, species='Po', coords=Vectors.replace_coords(new_vector, atom.coords), coords_are_cartesian=True)
+            if len(neighbors) != 0:
+                notempty = True
+                curr_vector = Vectors.get_components(atom.coords, neighbors[0].coords) # current distance in Å
+                new_vector = Vectors.replace_distance(curr_vector, chalcogen_hydrogen_distances[str(atom.specie)]) # desired length in Å
+        
+                # replace atoms with temp species not already in molecule
+                mocha.replace(idx=neighbors[0].index, species='Po', coords=Vectors.replace_coords(new_vector, atom.coords), coords_are_cartesian=True)
 
     #removing atoms that make up ligand
-    for o in organics:
-        mocha.remove_species(species=o)
+    if notempty:
+        for o in organics:
+            mocha.remove_species(species=o)
 
-    for i, atom in enumerate(mocha):
-        if str(atom.specie) == "Po":
-            mocha.replace(idx=i, species='H')
+        for i, atom in enumerate(mocha):
+            if str(atom.specie) == "Po":
+                mocha.replace(idx=i, species='H')
 
-    mocha.to(filename = f"{dest}/inorganic-with-H.cif") # write to file
-    struct = Structure.from_file(f"{dest}/inorganic-with-H.cif")
-    poscar = Poscar(struct)
-    poscar.write_file(f"{dest}/inorganic-with-H.vasp")
-    os.system(f"rm {dest}/inorganic-with-H.cif") 
+        mocha.to(filename = f"{dest}/inorganic-with-H.cif") # write to file
+        struct = Structure.from_file(f"{dest}/inorganic-with-H.cif")
+        poscar = Poscar(struct)
+        poscar.write_file(f"{dest}/inorganic-with-H.vasp")
+        os.system(f"rm {dest}/inorganic-with-H.cif") 
+        print(f"file written to {dest}")
+    else:
+        print("There are no neighbors! Try increasing the tolerance for chalc-carbon distances.")
+        print("Default = 0.25 Å")
 
 def remove_dupes(structure):
     '''Removes duplicates from a structure
