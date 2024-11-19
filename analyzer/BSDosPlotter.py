@@ -46,7 +46,8 @@ def color_bs_dos_plotter(
     chalcs = ['Te', 'Se', "S"]
 
     ############ Plotting the DOS ############
-    colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", '#FF1493', "#666666", "#000000"]
+    colors = ["#FFD700", "#FF7F50", "#FF1493", "#8A2BE2", "#0269fa", "#008000"]
+    # colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", '#FF1493', "#666666", "#000000"]
     cunt = 4
     for orb in dos.get_dos_dict():
         x = dos.get_dos_dict()[orb]['densities']['1']
@@ -82,7 +83,7 @@ def color_bs_dos_plotter(
     elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
     inorganics = elements[0]
     organics = elements[1]
-    group_dict = [{'elements':inorganics,'color':[255, 70, 70]},{'elements':organics,'color':[0,0,0]}]
+    group_dict = [{'elements':inorganics,'color':[255, 20, 145]},{'elements':organics,'color':[0,0,0]}]
     
     if isinstance(smooth, bool):
         smooth = [smooth] * len(bandz._bs)
@@ -421,26 +422,45 @@ def sexier_brillouin_plot(path, bsp, band_lbls, lw, fs, ms, savefig=True):
     if savefig:
         fig.savefig(f"{path}/figures-and-data/brillouin_zone.png", dpi=600)
 
-
-def sexy_dos_plot(path, dos, ylim, xlim=None, savefig=True):
+def sexy_dos_plot(path, dos, ylim=None, xlim=None, savefig=True):
     '''Get element DOS and plot according to whether
         the element is a metal, chalcogen, or organic.
         Axes are scaled automatically according to the range
         of energies and densities. '''
+    
+    metal = ["Ag", "Hg", "Au", "Cu"]
+    chalc = ["Se", "Te", "S"]
+
     zero_to_efermi = dos.zero_at_efermi 
 
-    fuck, ax = plt.subplots(1, figsize=(9,6), dpi=600)
+    fuck, ax = plt.subplots(1, figsize=(6,4), dpi=600)
 
-    colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", "#e0a7fc",'#FF1493', "#fca7dd", "#666666", "#000000"]
-    cunt = 0
+    colors = ["#FFD700", "#FF7F50", "#FF1493", "#8A2BE2", "#0269fa", "#008000"]
+    # colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", "#e0a7fc",'#FF1493', "#fca7dd", "#666666", "#000000"]
+    cunt = 4
+    ylims = []
     for orb in dos.get_dos_dict():
         y = dos.get_dos_dict()[orb]['densities']['1']
         x =  dos.get_dos_dict()[orb]['energies']
-        ax.plot(x, y, label=orb, c=colors[cunt], linewidth=3)
+        ylims.append(max(y))
+        if orb in metal:
+            ax.plot(x, y, label=orb, c=colors[0],linewidth=3)
+        elif orb in chalc:
+            ax.plot(x, y, label=orb, c=colors[1],linewidth=3)
+        elif orb=="C":
+            ax.plot(x, y, label=orb, c=colors[2],linewidth=3)
+        elif orb=="H":
+            ax.plot(x, y, label=orb, c=colors[3],linewidth=3)
+        else:
+            ax.plot(x, y, label=orb, c=colors[cunt],linewidth=3)
         cunt += 1
     ax.set_ylabel(r"DOS (E/eV)")
     ax.set_xlim(xlim[0], xlim[1])
-    ax.set_ylim(ylim)
+    ylim_max = max(ylims)
+    if ylim is None:
+        ax.set_ylim(-1, ylim_max+1)
+    else:
+        ax.set_ylim(ylim)
     ax.set_xlabel(r"Energies (eV)")
 
     if not zero_to_efermi:
@@ -448,8 +468,8 @@ def sexy_dos_plot(path, dos, ylim, xlim=None, savefig=True):
     else:
         ax.axhline(y = 0.0, color = '#000000', linestyle = '--', label='$E_{Fermi}$',linewidth=1.5)
         
-    ax.grid()
-    ax.legend(loc='upper left')
+    # ax.grid()
+    ax.legend(loc='upper right')
  
 
     for spine in ax.spines.values():
@@ -460,7 +480,50 @@ def sexy_dos_plot(path, dos, ylim, xlim=None, savefig=True):
     if not os.path.exists(f"{path}/figures-and-data"):
         os.mkdir(f"{path}/figures-and-data")
     if savefig:
-        fuck.savefig(f"{path}/figures-and-data/orbital_pdos.png", dpi=600)
+        fuck.savefig(f"{path}/figures-and-data/element_dos.png", dpi=600)
+
+
+def sexy_orbital_plot(path, dos, ylim=None, species=None, xlim=None, savefig=True):
+    '''Get element DOS and plot according to whether
+        the element is a metal, chalcogen, or organic.
+        Axes are scaled automatically according to the range
+        of energies and densities. '''
+    zero_to_efermi = dos.zero_at_efermi 
+
+    fuck, ax = plt.subplots(1, figsize=(6,4), dpi=600)
+
+    colors = [ "#0000FF",'#FF1493', "#8A2BE2"]
+    markers = ["o", "^", "."]
+    lw = [3,2,1]
+    cunt = 0
+    ylims = []
+    for orb in dos.get_dos_dict():
+        y = dos.get_dos_dict()[orb]['densities']['1']
+        x =  dos.get_dos_dict()[orb]['energies']
+        ylims.append(max(y))
+        ax.plot(x, y, label=orb, c=colors[cunt], marker=markers[cunt], markersize=lw[cunt]+0.5,linewidth=lw[cunt])
+        cunt += 1
+    ax.set_ylabel(r"DOS (E/eV)")
+    ax.set_xlim(xlim[0], xlim[1])
+    ylim_max = max(ylims)
+    if ylim is None:
+        ax.set_ylim(-1, ylim_max+1)
+    else:
+        ax.set_ylim(ylim)
+    ax.set_xlabel(r"Energies (eV)")
+        
+    # ax.grid()
+    ax.legend(loc='upper right')
+
+    for spine in ax.spines.values():
+        spine.set_linewidth(2)
+
+    # ax.legend(loc='upper right', fontsize=20)
+    fuck.tight_layout()
+    if not os.path.exists(f"{path}/figures-and-data"):
+        os.mkdir(f"{path}/figures-and-data")
+    if savefig:
+        fuck.savefig(f"{path}/figures-and-data/orbital_pdos_{species}.png", dpi=600)
 
 
 def color_bs_plotter(
@@ -505,7 +568,7 @@ def color_bs_plotter(
     elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
     inorganics = elements[0]
     organics = elements[1]
-    group_dict = [{'elements':inorganics,'color':[255, 70, 70]},{'elements':organics,'color':[0,0,0]}]
+    group_dict = [{'elements':inorganics,'color':[250, 62, 197]},{'elements':organics,'color':[0,0,0]}]
     
     if isinstance(smooth, bool):
         smooth = [smooth] * len(bandz._bs)

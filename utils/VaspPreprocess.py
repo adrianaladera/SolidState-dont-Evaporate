@@ -42,6 +42,10 @@ def regular_kpoints(path, structure, factor=None, mesh_type=None):
     
     print("Regular KPOINTS written")
 
+def kpoints_by_density(path, structure, density=1000):
+    kpoints = Kpoints.automatic_density(structure, kppa=density)
+    kpoints.write_file(f"{path}/KPOINTS")
+
 
 def band_kpoints(struct, path, kpath_type='s',ishybrid=False):
     ''' structure - pymatgen.core.Structure object
@@ -206,7 +210,7 @@ def make_potcar(path):
     f.close()
     print("POTCAR written")
 
-def scf_incar(write_path, lwave=False, algo=None, prec=None, npar=None, ncore=None, 
+def scf_incar(write_path, lwave=True, algo=None, prec=None, npar=None, ncore=None, 
              kpar=None, lreal=None, ismear=None, sigma=None):
     '''Must be called after scf is created.'''
     if os.path.exists(f"{write_path}/POTCAR"):
@@ -217,7 +221,7 @@ def scf_incar(write_path, lwave=False, algo=None, prec=None, npar=None, ncore=No
             "NCORE": ncore if ncore is not None else 8,
             "KPAR": kpar if kpar is not None else 2,
             "LREAL": lreal if lreal is not None else "Auto",
-            "LWAVE": lwave if lwave is not True else True,
+            "LWAVE": lwave if lwave is not False else True,
             "IMSEAR": ismear if ismear is not None else 0,
             "SIGMA": sigma if sigma is not None else 0.03
         }
@@ -308,3 +312,71 @@ srun vasp_std'''
     f = open(f"{destination}/run.slurm", 'w')
     f.write(s)
     f.close()
+    
+def make_parchg_incar(path):#, vbm, cbm, vbm_cbm_tol):
+    '''Creates an INCAR for a VASP partial charge calculation,
+        specifically for creating VBM and CBM PARCHG files. It 
+        searches through the OUTCAR of a ground state calculation (SCF)
+        and finds the appropriate kpoint (KPUSE) and band (IBAND) indices
+        that are closest to the VBM and CBM calculated from BSVasprun.
+        It then writes the selected indices to an INCAR.
+
+        path - root directory <type: str>
+        bs - Pymatgen BSVasprun object <type: pymatgen.io.vasp.outputs.BSVasprun>
+        vbm_cbm_tol - tolerance range to find VBM and CBM <type: list of floats>'''
+    
+    import re
+
+    with open(f"{path}/scf/OUTCAR", 'r') as f:
+        content = f.read()
+
+    start_keyword = "k-point     " # start kpoint
+    end_keyword = ".00000\n\n"  # end kpoint
+
+    # Use a regular expression to find all text between the start and end keywords
+    matches = re.findall(f'{re.escape(start_keyword)}(.*?){re.escape(end_keyword)}', content, re.DOTALL)
+
+    vbm_list, cbm_list = [],[]
+    ibands, kpoints = [], []
+
+    for m in matches: # all groups of k indices and their respective band indices
+        data = m.split('\n')
+        for band in range(2, len(data)-1):
+            if float(data[band+1].split()[2]) == 0.0 and float(data[band].split()[2]) != 0.0: #checking for band gap
+                kpoints.append(int(data[0][0]))
+                vbm_list.append(float(data[band].split()[1]))
+                cbm_list.append(float(data[band+1].split()[1]))
+
+                if int(data[band].split()[0]) not in ibands:
+                    ibands.append(int(data[band].split()[0])) #vbm
+                if int(data[band+1].split()[0]) not in ibands:
+                    ibands.append(int(data[band+1].split()[0])) #vbm
+
+                print(f"{int(data[0][0])} {data[band].split()[1]} {data[band+1].split()[1]}")
+
+    encut = float(sp.run(f"grep \"ENCUT\" {path}/scf/OUTCAR", shell=True, capture_output=True, text=True).stdout.split()[2])
+    ispin = int(sp.run(f"grep \"ISPIN\" {path}/scf/OUTCAR", shell=True, capture_output=True, text=True).stdout.split()[2])
+    isym = int(sp.run(f"grep \"ISYM\" {path}/scf/OUTCAR", shell=True, capture_output=True, text=True).stdout.split()[2])
+
+    vbm_band, cbm_band = max(vbm_list), min(cbm_list)
+    vbm_index, cbm_index = vbm_list.index(vbm_band), cbm_list.index(cbm_band)
+    band_gap = cbm_band - vbm_band
+
+    print(f"VBM: {vbm_band} eV || CBM: {cbm_band} eV || band gap: {band_gap:.3f} eV")
+    print(f"IBANDS: {ibands}")
+    print(f"KPOINTS: {kpoints[vbm_index]} {kpoints[cbm_index]}")
+
+    if not os.path.exists(f"{path}/parchg"):
+        os.mkdir(f"{path}/parchg")
+    with open(f"{path}/parchg/INCAR", 'w') as f:
+        s = f"# VBM: {ibands[0]} {kpoints[vbm_index]} || CBM: {ibands[1]} {kpoints[cbm_index]}"
+        s += "\nSYSTEM = STM simulation\n# must be the same as the SCF calc\n"
+        s += f"\nENCUT = {encut}\nISPIN = {ispin}\nISYM = {isym}" 
+        s += f"\nKPUSE = {kpoints[vbm_index]} {kpoints[cbm_index]}"
+        s += f"\nIBAND = {ibands[0]} {ibands[1]}"
+        s += "\n\nLPARD = .TRUE.\nLSEPB = .TRUE.\nLSEPK = .TRUE.\n"
+        f.write(s)
+    f.close()
+
+    os.system(f"cp {path}/scf/POSCAR {path}/parchg/")
+    print(f"PARCHG INCAR file written!")
