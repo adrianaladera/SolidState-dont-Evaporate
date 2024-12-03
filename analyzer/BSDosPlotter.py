@@ -46,7 +46,8 @@ def color_bs_dos_plotter(
     chalcs = ['Te', 'Se', "S"]
 
     ############ Plotting the DOS ############
-    colors = ["#FFD700", "#FF7F50", "#FF1493", "#8A2BE2", "#0269fa", "#008000"]
+    # colors = ["#DC267F", "#FFB000", "#FE6100", "#648FFF", "#785EF0", "#CC0000", "#FF7F50", "#FFD700", "#008000"] # red-green colorblind friendly!
+    colors = ["#FF1493","#FE6100", "#FFB000",  "#8A2BE2", "#0269fa", "#e0a7fc"] # red-green colorblind friendly!
     # colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", '#FF1493', "#666666", "#000000"]
     cunt = 4
     for orb in dos.get_dos_dict():
@@ -83,7 +84,7 @@ def color_bs_dos_plotter(
     elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
     inorganics = elements[0]
     organics = elements[1]
-    group_dict = [{'elements':inorganics,'color':[255, 20, 145]},{'elements':organics,'color':[0,0,0]}]
+    group_dict = [{'elements':inorganics,'color':[255, 119, 36]},{'elements':organics,'color':[0,0,0]}]
     
     if isinstance(smooth, bool):
         smooth = [smooth] * len(bandz._bs)
@@ -435,7 +436,8 @@ def sexy_dos_plot(path, dos, ylim=None, xlim=None, savefig=True):
 
     fuck, ax = plt.subplots(1, figsize=(6,4), dpi=600)
 
-    colors = ["#FFD700", "#FF7F50", "#FF1493", "#8A2BE2", "#0269fa", "#008000"]
+    colors = ["#FF1493","#FE6100", "#FFB000",  "#8A2BE2", "#0269fa", "#e0a7fc"] # red-green colorblind friendly!
+    # colors = ["#DC267F", "#FFB000", "#FE6100", "#648FFF", "#785EF0", "#CC0000", "#FF7F50", "#FFD700", "#008000"] # first 5 are red-green colorblind friendly!
     # colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", "#e0a7fc",'#FF1493', "#fca7dd", "#666666", "#000000"]
     cunt = 4
     ylims = []
@@ -453,7 +455,7 @@ def sexy_dos_plot(path, dos, ylim=None, xlim=None, savefig=True):
             ax.plot(x, y, label=orb, c=colors[3],linewidth=3)
         else:
             ax.plot(x, y, label=orb, c=colors[cunt],linewidth=3)
-        cunt += 1
+        # cunt += 1
     ax.set_ylabel(r"DOS (E/eV)")
     ax.set_xlim(xlim[0], xlim[1])
     ylim_max = max(ylims)
@@ -492,7 +494,7 @@ def sexy_orbital_plot(path, dos, ylim=None, species=None, xlim=None, savefig=Tru
 
     fuck, ax = plt.subplots(1, figsize=(6,4), dpi=600)
 
-    colors = [ "#0000FF",'#FF1493', "#8A2BE2"]
+    colors = [ "#8A2BE2",'#0269fa', "#FF1493"]
     markers = ["o", "^", "."]
     lw = [3,2,1]
     cunt = 0
@@ -568,7 +570,7 @@ def color_bs_plotter(
     elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
     inorganics = elements[0]
     organics = elements[1]
-    group_dict = [{'elements':inorganics,'color':[250, 62, 197]},{'elements':organics,'color':[0,0,0]}]
+    group_dict = [{'elements':inorganics,'color':[255, 119, 36]},{'elements':organics,'color':[0,0,0]}]
     
     if isinstance(smooth, bool):
         smooth = [smooth] * len(bandz._bs)

@@ -92,7 +92,7 @@ def band_kpoints(struct, path, kpath_type='s',ishybrid=False):
     
 def band_incar(potcar_path, write_path, ishybrid=False,
                algo=None, prec=None, npar=None, ncore=None, 
-             kpar=None, lreal=None, ismear=None, sigma=None):
+             kpar=None, lreal=None, lcharg=None, lwave=None, ismear=None, sigma=None):
     '''MUST have the outcar path of scf_band
     write_path - must be a directory called scf_band'''
     ass = True
@@ -104,6 +104,8 @@ def band_incar(potcar_path, write_path, ishybrid=False,
         "NCORE": ncore if ncore is not None else 8,
         "KPAR": kpar if kpar is not None else 2,
         "LREAL": lreal if lreal is not None else "Auto",
+        "LCHARG": lcharg if lcharg is not None else "False",
+        "LWAVE": lwave if lwave is not None else "False",
         "IMSEAR": ismear if ismear is not None else 0,
         "SIGMA": sigma if sigma is not None else 0.03
         }
@@ -141,7 +143,7 @@ def band_incar(potcar_path, write_path, ishybrid=False,
 
 def dos_incar(potcar_path, write_path, ishybrid=False,
                algo=None, prec=None, npar=None, ncore=None, 
-             kpar=None, lreal=None, ismear=None, sigma=None):
+             kpar=None, lcharg=None, lwave=None, lreal=None, ismear=None, sigma=None):
     '''MUST have the outcar path of scf_band
     write_path - must be a directory called scf_band'''
     ass = True
@@ -153,6 +155,8 @@ def dos_incar(potcar_path, write_path, ishybrid=False,
         "NCORE": ncore if ncore is not None else 8,
         "KPAR": kpar if kpar is not None else 2,
         "LREAL": lreal if lreal is not None else "Auto",
+        "LCHARG": lcharg if lcharg is not None else "False",
+        "LWAVE": lwave if lwave is not None else "False",
         "IMSEAR": ismear if ismear is not None else 0,
         "SIGMA": sigma if sigma is not None else 0.03
         }
@@ -211,7 +215,7 @@ def make_potcar(path):
     print("POTCAR written")
 
 def scf_incar(write_path, lwave=True, algo=None, prec=None, npar=None, ncore=None, 
-             kpar=None, lreal=None, ismear=None, sigma=None):
+             kpar=None, lcharg=None, lreal=None, ismear=None, sigma=None):
     '''Must be called after scf is created.'''
     if os.path.exists(f"{write_path}/POTCAR"):
         params = {
@@ -222,6 +226,7 @@ def scf_incar(write_path, lwave=True, algo=None, prec=None, npar=None, ncore=Non
             "KPAR": kpar if kpar is not None else 2,
             "LREAL": lreal if lreal is not None else "Auto",
             "LWAVE": lwave if lwave is not False else True,
+            "LCHARG": lcharg if lcharg is not None else False,       
             "IMSEAR": ismear if ismear is not None else 0,
             "SIGMA": sigma if sigma is not None else 0.03
         }
@@ -252,7 +257,7 @@ def scf_incar(write_path, lwave=True, algo=None, prec=None, npar=None, ncore=Non
 
 def relax_incar(write_path, isif, nsw, ibrion, isym, ivdw=False, lwave=False,
               algo=None, prec=None, npar=None, ncore=None, 
-             kpar=None, lreal=None, ismear=None, sigma=None):
+             kpar=None, lreal=None, lcharg=None, ismear=None, sigma=None):
     '''Must be called after scf is created.'''
     if os.path.exists(f"{write_path}/POTCAR"):
         params = {
@@ -263,6 +268,7 @@ def relax_incar(write_path, isif, nsw, ibrion, isym, ivdw=False, lwave=False,
             "KPAR": kpar if kpar is not None else 2,
             "LREAL": lreal if lreal is not None else "Auto",
             "LWAVE": lwave if lwave is not False else False,
+            "LCHARG": lcharg if lcharg is not None else "False",
             "IMSEAR": ismear if ismear is not None else 0,
             "SIGMA": sigma if sigma is not None else 0.03,
             "IVDW": ivdw if ivdw is not False else 0
@@ -293,7 +299,7 @@ def relax_incar(write_path, isif, nsw, ibrion, isym, ivdw=False, lwave=False,
         print(f"{write_path}/POTCAR does not exist.")
 
 
-def run_cpu(structure, destination, hours=19, cpu=1):
+def run_cpu(structure, destination, hours=18, cpu=1):
     s = f'''#!/bin/bash
     
 #SBATCH -A m4064
