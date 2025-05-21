@@ -1,6 +1,8 @@
-from utils import ElectronicStructure   
+from utils import utils   
 import matplotlib.pyplot as plt
-from collections import defaultdict
+from pymatgen.electronic_structure.core import Spin
+import pymatgen.electronic_structure.plotter as es
+
 # from packages import Tools, Matplotlib, Pymatgen
 from utils.packages import * 
 
@@ -14,6 +16,29 @@ class ElectronicStructurePlotter:
 
         self.path = path
         self.savefig = savefig
+
+    def _projections_to_array(self, projections):
+        """Converts projection data to numpy array.
+        
+        projections: output of BandStructure.get_projection_on_elements()
+        output: np.array of size [n_spin, n_bands, n_panes * distances, n_elements]
+        """
+        array = []
+        for spin in projections.keys():
+            spin_array = []
+            for band in projections[spin]:
+                band_array = []
+                for d in band:
+                    band_array.append(np.array(list(d.values())))
+                spin_array.append(np.stack(band_array, axis=0))
+            array.append(np.stack(spin_array, axis=0))
+        return np.stack(array, axis=0)
+
+    def _get_element_projection_keys(self, projections):
+        for spin in projections.keys():
+            for band in projections[spin]:
+                for d in band:
+                    return d.keys()
 
     def color_bs_dos_plotter(
     self,
@@ -97,7 +122,7 @@ class ElectronicStructurePlotter:
         a1.legend(loc='upper right', fontsize=20)
 
         ################### Plotting the band structure ###############
-        elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
+        elements = utils.sort_elements(f"{path}/band/POSCAR")
         inorganics = elements[0]
         organics = elements[1]
         # group_dict = [{'elements':inorganics,'color':[255, 119, 36]},{'elements':organics,'color':[0,0,0]}]
@@ -115,8 +140,8 @@ class ElectronicStructurePlotter:
             projections = bs.get_projection_on_elements()
             
             # Get projections into matrix form and order of elements in projections
-            proj_array = ElectronicStructure.projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
-            elem_keys = list(ElectronicStructure.get_element_projection_keys(projections)) # [n_elements]
+            proj_array = self._projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
+            elem_keys = list(self._get_element_projection_keys(projections)) # [n_elements]
 
             # Get groups and colors from group_dict
             color_matrix = np.array([np.array(g["color"]) for g in group_dict]) # [n_group, rgb]
@@ -615,7 +640,7 @@ class ElectronicStructurePlotter:
         fuck, ax = plt.subplots(1, figsize=(12,8), dpi=600)
         vbm_line, cbm_line = None, None
 
-        elements = ElectronicStructure.sort_elements(f"{path}/band/POSCAR")
+        elements = utils.sort_elements(f"{path}/band/POSCAR")
         inorganics = elements[0]
         organics = elements[1]
         group_dict = [{'elements':inorganics,'color':[255, 119, 36]},{'elements':organics,'color':[0,0,0]}]
@@ -631,8 +656,8 @@ class ElectronicStructurePlotter:
             projections = bs.get_projection_on_elements()
             
             # Get projections into matrix form and order of elements in projections
-            proj_array = ElectronicStructure.projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
-            elem_keys = list(ElectronicStructure.get_element_projection_keys(projections)) # [n_elements]
+            proj_array = self._projections_to_array(projections) # [n_spin, n_bands, n_distances, n_elements]
+            elem_keys = list(self._get_element_projection_keys(projections)) # [n_elements]
 
             # Get groups and colors from group_dict
             color_matrix = np.array([np.array(g["color"]) for g in group_dict]) # [n_group, rgb]
@@ -834,7 +859,29 @@ class ElectronicStructurePlotter:
             fuck.savefig(f"{path}/figures-and-data/colored_bandstructure.png", dpi=600)
 
         return labels_list, vbm_line, cbm_line
+    
+                
+    def get_band_data(self, bs):
+        '''Writes BSVasprun data to csv file'''
+        path = self.path
+        savedata = self.savefig
+        
+        data = bs.as_dict()
 
+        vbm = data["vbm"]["energy"]
+        cbm = data["cbm"]["energy"]
+        efermi = data["efermi"]
+        bandgap = data["band_gap"]["energy"]
+        transition = data["band_gap"]["transition"]
+
+        df = pd.DataFrame({"vbm": vbm, "cbm":cbm, "eFermi":efermi, "bandgap": bandgap, "transition":transition},index=[0])
+
+        if savedata:
+            if not os.path.exists(f"{path}/figures-and-data"):
+                os.mkdir(f"{path}/figures-and-data")
+            df.to_csv(f"{path}/figures-and-data/estruct_energy_data.csv")
+        
+        return df
 
 
 class BandAlignment:
@@ -844,7 +891,7 @@ class BandAlignment:
         self.matches = matches
         self.bs = bs
 
-    def get_max_projections(self, proj_data, band_gap, is_vbm=True):
+    def _get_max_projections(self, proj_data, band_gap, is_vbm=True):
         """
         proj_data: list[list[dict[str, float]]]
             Outer list: bands
@@ -869,7 +916,7 @@ class BandAlignment:
 
         return max_proj
 
-    def get_band_proj_per_atom(self, matches, proj):
+    def _get_band_proj_per_atom(self, matches, proj):
         '''
         Gets the indices of the VBM and CBM, then for both the 
         VBM and CBM, gets the projections for each atom onto the 
@@ -898,26 +945,17 @@ class BandAlignment:
             if cbm > 0:  # break outer loop once found
                 break
 
-        print(f"VBM: {vbm}, CBM: {cbm}")
-
         vbm_data = self.get_max_projections(proj[Spin.up], band_gap=vbm, is_vbm=True)
         cbm_data = self.get_max_projections(proj[Spin.up], band_gap=cbm, is_vbm=False)
-
-        print("VBM projections:", vbm_data)
-        print("CBM projections:", cbm_data)
 
         # Remove elements we don't care about
         for unwanted in [0]: #, 'H']:
             vbm_data.pop(unwanted, None)
             cbm_data.pop(unwanted, None)
 
-        for atom in vbm_data:
-            if atom in cbm_data:
-                print(f"{atom} — VBM: {vbm_data[atom]}, CBM: {cbm_data[atom]}")
-
         return vbm_data, cbm_data
 
-    def get_band_alignment(self, vbm_data, cbm_data, bs):
+    def _get_band_alignment(self, vbm_data, cbm_data, bs):
         ''' 
         Gets the max projection in the VBM and min projection 
         in the CBM of all the atomic species, for both the 
@@ -982,9 +1020,9 @@ class BandAlignment:
         matches = self.matches
         bs = self.bs
 
-        proj = bs.get_projection_on_elements()
-        vbm_shit, cbm_shit = self.get_band_proj_per_atom(matches, proj)
-        vbm_gaps, cbm_gaps = self.get_band_alignment(vbm_shit, cbm_shit, bs)
+        proj = bs._get_projection_on_elements()
+        vbm_shit, cbm_shit = self._get_band_proj_per_atom(matches, proj)
+        vbm_gaps, cbm_gaps = self._get_band_alignment(vbm_shit, cbm_shit, bs)
 
         atoms = list(vbm_gaps.keys())
         x_vals = list(range(len(atoms)))
@@ -1026,3 +1064,74 @@ class BandAlignment:
         if savefig:
             plt.savefig(f"{path}/figures-and-data/band_alignment.png", dpi=600)
         plt.show()
+
+class EffectiveMass:
+    def __init__(self, path, data, settings):
+        self.path = path
+        self.data = data
+        self.settings = settings
+
+    def effmass_from_vbm_cbm(self, vbm, cbm, tol=1e-4):
+        ''' data - effmass.inputs.DataVasp() object
+            settings - effmass.inputs.Settings() object
+            vbm - valence band maximum
+            cbm - conduction band minimum
+            tol - tolerance depth for generating segments. Default is 1e-4
+            
+            Returns: effmass.extrema segments thingy'''
+        data = self.data
+        settings = self.settings
+
+        bk_list = []
+        for i, en_list in enumerate(data.energies):
+            for j, en in enumerate(en_list):
+                for k in [vbm, cbm]:
+                    diff = abs(k - en)
+                    if diff < tol:
+                        bk_list.append([i,j])
+
+        segments = extrema.generate_segments(settings,data, bk = bk_list)
+        outputs.plot_segments(data,settings,segments)
+
+        return segments
+
+
+    def get_effmass_data(self, segments, selected_indices=None):
+        ''' segments - effmass yourmom
+            data - effmass.inputs.DataVasp() object
+            settings - effmass.inputs.Settings() object
+            selected_indices - indices to visualize and retrieve data for effective mass.
+                            Defaults to None.
+            path - path to save. Defaults to None.'''
+        
+        path = self.path
+        data = self.data
+        settings = self.settings
+        
+        data_frame = []
+
+        if selected_indices is None:
+            # add some option for None on selected_indices
+            pass
+        else:
+            seggs = selected_indices
+
+        for s in seggs:
+            data_frame.append({"band": segments[s].band_type, 
+            "index":s,
+            "max curvature": max(segments[s].five_point_leastsq_fit()),
+            "finite diff": segments[s].finite_difference_effmass(),
+                "five-pt LSQ":segments[s].five_point_leastsq_effmass()})
+        
+        outputs.plot_segments(data,settings,[segments[i] for i in selected_indices], savefig=True, random_int=1)
+        df = pd.DataFrame(data_frame)
+        if path is not None:
+            print(f"path {path} exists")
+            df.to_csv(f"{path}/figures-and-data/effective_mass.csv")
+            # fix this
+            if os.path.exists("/Users/adrianaladera/Desktop/MIT/RESEARCH/Github_repos/SolidState-dont-Evaporate/effmass_1.png"):
+                os.rename("/Users/adrianaladera/Desktop/MIT/RESEARCH/Github_repos/SolidState-dont-Evaporate/effmass_1.png", f"{path}/figures-and-data/effmass.png")
+            else:
+                print()
+
+        return df
