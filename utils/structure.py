@@ -37,7 +37,9 @@ class ModifyStructure:
             Purpose is to isolate the inorganic interaction of the 
             MOCha at the band gap. 
             dest - where to store final file
-            mocha - Pymatgen Structure object'''
+            mocha - Pymatgen Structure object
+            
+        Returns: ase.Atoms object'''
 
         # distance in Angstrom between the given chalcogen and a hydrogen
         chalcogen_hydrogen_distances = {'Se': 1.46, 'S': 1.3, 'Te': 1.68}
@@ -82,6 +84,7 @@ class ModifyStructure:
             poscar.write_file(f"{dest}/inorganic-with-H.vasp")
             os.system(f"rm {dest}/inorganic-with-H.cif") 
             print(f"file written to {dest}")
+            return struct
         else:
             print("There are no neighbors! Try increasing the tolerance for chalc-carbon distances.")
             print("Default = 0.25 Å")

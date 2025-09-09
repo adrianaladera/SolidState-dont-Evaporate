@@ -2,6 +2,7 @@ from utils import utils
 import matplotlib.pyplot as plt
 from pymatgen.electronic_structure.core import Spin
 import pymatgen.electronic_structure.plotter as es
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 # from packages import Tools, Matplotlib, Pymatgen
 from utils.packages import * 
@@ -49,8 +50,10 @@ class ElectronicStructurePlotter:
     # selected_indices=None,
     ylim=None,
     dos_xlim=None,
+    xticks=None,
     smooth=False,
-    vbm_cbm_marker=True,
+    vbm_marker=True,
+    cbm_marker=True,
     smooth_tol=0,
     smooth_k=3,
     smooth_np=100,
@@ -88,9 +91,20 @@ class ElectronicStructurePlotter:
         colors = ["#FF1493","#fc7b2b", "#FFB000",  "#8A2BE2", "#0269fa", "#e0a7fc"] # red-green colorblind friendly!
         # colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", '#FF1493', "#666666", "#000000"]
         cunt = 4
+
+        # getting normalization shit
+        max_list, min_list, xlims = [], [], []
         for orb in dos.get_dos_dict():
             x = dos.get_dos_dict()[orb]['densities']['1']
-            norm_x = [(i - min(x)) / (max(x) - min(x)) for i in x]
+            max_list.append(max(x))
+            min_list.append(min(x))
+        
+
+        for orb in dos.get_dos_dict():
+            x = dos.get_dos_dict()[orb]['densities']['1']
+            # 2 * ((x - min_val) / (max_val - min_val)) - 1
+            norm_x = [(i - min(min_list)) / (max(max_list) - min(min_list)) for i in x]
+            # norm_x = [(i - max(max_list)) / (max(max_list) - min(min_list)) for i in x]
             y =  dos.get_dos_dict()[orb]['energies']
             if str(orb) in METALS:
                 a1.plot(norm_x, y, label=orb, c=colors[0], linewidth=4)
@@ -103,17 +117,28 @@ class ElectronicStructurePlotter:
             else: 
                 a1.plot(norm_x, y, label=orb, c=colors[cunt], linewidth=4)
                 cunt += 1
+            xlims.append(max(norm_x))
+        print(max(xlims))
         a1.set_xlabel(r"Normalized DOS (E/eV)", fontsize=24)
-        a1.set_xlim(-0.1, 1.0)
-        xticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-        a1.set_xticks(xticks)
+        if dos_xlim is None and xticks is None:
+            a1.set_xlim(-0.1,max(xlims)+0.1)
+            xticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+            a1.set_xticks(xticks)
+            a1.set_xticklabels(xticks, fontsize=20)
+        elif xticks is None and dos_xlim is not None:
+            # a1.set_xlim(dos_xlim[0], dos_xlim[1])
+            a1.set_xlim(dos_xlim)
+            a1.set_xticklabels([round(i, 2) for i in a1.get_xticks()], fontsize=19)
+        elif xticks is not None:
+            a1.set_xticks(xticks)
+            a1.set_xticklabels(xticks, fontsize=19)
         if ylim is not None:
-            a1.set_ylim(ylim[0], ylim[1])
+            a1.set_ylim(ylim)
             a1.set_ylabel(r"Energies (eV)", fontsize=24)
-        else:
-            a1.set_ylim(ylim[0], ylim[1])
-        a1.set_xticklabels(xticks, fontsize=20)
-        a1.set_yticklabels(np.arange(ylim[0], ylim[1]), fontsize=20)
+        # els/e:
+        #     a1.set_ylim(ylim[0], ylim[1])
+        a1.set_yticklabels(a1.get_yticks(), fontsize=20)
+        # a1.set_yticklabels(np.arange(ylim[0], ylim[1]), fontsize=20)
 
         if not zero_to_efermi:
             a1.axhline(y = dos.get_dos_dict()['Ag']['efermi'], color = 'r', linestyle = '--', label='$E_{Fermi}$',linewidth=1.5)
@@ -258,13 +283,13 @@ class ElectronicStructurePlotter:
 
             vb_point, cb_point = [],[]
             # plot markers for vbm and cbm
-            if vbm_cbm_marker and data["vbm"] is not None and data["cbm"] is not None:
-                for cbm in data["cbm"]:
-                    print(f"cbm: {cbm}")
-                    cb_point.append([cbm[0], cbm[1]])
+            # if vbm_marker and data["vbm"] is not None:
+            if data["cbm"] is not None and data["vbm"] is not None:
                 for vbm in data["vbm"]:
-                    print(f"vbm: {vbm}")
                     vb_point.append([vbm[0], vbm[1]])
+            # if cbm_marker and data["cbm"] is not None:
+                for cbm in data["cbm"]:
+                    cb_point.append([cbm[0], cbm[1]])
 
             # Draw Fermi energy, only if not the zero
             if not zero_to_efermi:
@@ -329,10 +354,12 @@ class ElectronicStructurePlotter:
             a0.annotate('', xy=(x_min_range+0.1,cb_point[0][1]), xytext=(x_min_range+0.1,vb_point[0][1]), arrowprops=dict(arrowstyle='<->', color='#000000', lw=3))
             a0.text(x_min_range+0.2, (cb_point[0][1]+vb_point[0][1])/2, f'{bandgap:.3f} eV', color='#666666', fontsize=20)
 
-        for c in cb_point:
-            a0.scatter(c[0], c[1], color="b", marker="o", s=100)
-        for v in vb_point:
-            a0.scatter(v[0], v[1], color="g", marker="o", s=100)
+        if cbm_marker:
+            for c in cb_point:
+                a0.scatter(c[0], c[1], color="b", marker="o", s=100)
+        if vbm_marker:
+            for v in vb_point:
+                a0.scatter(v[0], v[1], color="g", marker="o", s=100)
 
         # changing spine thickness
         for ax in [a0, a1]:
@@ -348,7 +375,7 @@ class ElectronicStructurePlotter:
 
         return labels_list, vbm_line, cbm_line
 
-    def sexier_brillouin_plot(self, bsp, band_lbls, lw, fs, ms, coords_are_cartesian=False):
+    def sexier_brillouin_plot(self, bsp, band_lbls, lw, fs, elev=25, azim=35, coords_are_cartesian=False):
         '''Since the plot_brillouin() from Pymatgen produces
             the ugliest plot ever this is my version of plotting
             the Brillouin zone. It stores the k-path branches and
@@ -404,6 +431,7 @@ class ElectronicStructurePlotter:
 
         # Plot Brillouin zone lattice vectors in grey
         bz_lattice = bsp._bs[0].lattice_rec
+        print(bz_lattice)
 
         vertex1 = bz_lattice.get_cartesian_coords([0.0, 0.0, 0.0])
         directions = [
@@ -493,7 +521,7 @@ class ElectronicStructurePlotter:
         ax.set_xlim(-0.7,0.7)
         ax.set_ylim(-0.7,0.7)
         ax.set_zlim(-0.7,0.7)
-        ax.view_init(elev=25, azim=35)
+        ax.view_init(elev=elev, azim=azim)
         ax.axis("off")
 
         if not os.path.exists(f"{path}/figures-and-data"):
@@ -501,103 +529,131 @@ class ElectronicStructurePlotter:
         if savefig:
             fig.savefig(f"{path}/figures-and-data/brillouin_zone.png", dpi=600)
 
-    def sexy_dos_plot(self, dos, ylim=None, xlim=None):
-        '''Get element DOS and plot according to whether
-            the element is a metal, chalcogen, or organic.
-            Axes are scaled automatically according to the range
-            of energies and densities. '''
-        path = self.path
-        savefig = self.savefig
-        zero_to_efermi = dos.zero_at_efermi 
-        fuck, ax = plt.subplots(1, figsize=(6,4), dpi=600)
+    def plot_lattice_vectors(self, real_structure, elev=25, azim=35, lims=None):
 
-        colors = ["#FF1493","#fc7b2b", "#FFB000",  "#8A2BE2", "#0269fa", "#e0a7fc"] # red-green colorblind friendly!
-        # colors = ["#DC267F", "#FFB000", "#FE6100", "#648FFF", "#785EF0", "#CC0000", "#FF7F50", "#FFD700", "#008000"] # first 5 are red-green colorblind friendly!
-        # colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", "#e0a7fc",'#FF1493', "#fca7dd", "#666666", "#000000"]
-        cunt = 4
-        ylims = []
-        for orb in dos.get_dos_dict():
-            y = dos.get_dos_dict()[orb]['densities']['1']
-            x =  dos.get_dos_dict()[orb]['energies']
-            ylims.append(max(y))
-            if orb in METALS:
-                ax.plot(x, y, label=orb, c=colors[0],linewidth=3)
-            elif orb in CHALCS:
-                ax.plot(x, y, label=orb, c=colors[1],linewidth=3)
-            elif orb=="C":
-                ax.plot(x, y, label=orb, c=colors[2],linewidth=3)
-            elif orb=="H":
-                ax.plot(x, y, label=orb, c=colors[3],linewidth=3)
-            else:
-                ax.plot(x, y, label=orb, c=colors[cunt],linewidth=3)
-            # cunt += 1
-        ax.set_ylabel(r"DOS (E/eV)")
-        ax.set_xlim(xlim[0], xlim[1])
-        ylim_max = max(ylims)
-        if ylim is None:
-            ax.set_ylim(-1, ylim_max+1)
-        else:
-            ax.set_ylim(ylim)
-        ax.set_xlabel(r"Energies (eV)")
+        fig = plt.figure(figsize=(8,8), dpi=600)
+        ax = fig.add_subplot(111, projection='3d')
+        
+        vertex1 = [0.0, 0.0, 0.0]
+        real_lattice = real_structure.lattice.matrix
+        spg_analy =SpacegroupAnalyzer(real_structure)
+        prim_struct=spg_analy.get_primitive_standard_structure(international_monoclinic=False)
+        prim_lattice = prim_struct.lattice.matrix
+        recip_lattice = prim_struct.lattice.reciprocal_lattice.matrix
 
-        if not zero_to_efermi:
-                ax.axhline(y = dos.get_dos_dict()['Ag']['efermi'], color = 'r', linestyle = '--', label='$E_{Fermi}$',linewidth=1.5)
-        else:
-            ax.axhline(y = 0.0, color = '#000000', linestyle = '--', label='$E_{Fermi}$',linewidth=1.5)
-            
-        # ax.grid()
-        ax.legend(loc='upper right')
-    
+        for b in recip_lattice:
+            queen = ax.quiver(*vertex1, *b, color='red', alpha=0.7, linewidth=3, arrow_length_ratio=0)
+        for b in prim_lattice:
+            queef = ax.quiver(*vertex1, *b, color='blue', alpha=0.7, linewidth=1, arrow_length_ratio=0)
+            print(type(queef))
 
-        for spine in ax.spines.values():
-            spine.set_linewidth(2)
+        if lims is None:
+            lims = np.max(np.abs(np.concatenate(np.vstack([prim_lattice, real_lattice, recip_lattice])))) / 5
+        # lims=7
+        print(lims)
 
+        # ax.quiverkey(queef, 1,1,1, "real space")
+        ax.set_xlim(-lims, lims)
+        ax.set_ylim(-lims, lims)
+        ax.set_zlim(-lims, lims)
+
+        ax.view_init(elev=elev, azim=azim)
+    #         ax.axis("off")
+
+        plt.show()
         if savefig:
-            fuck.savefig(f"{path}/element_dos.png", dpi=600)
+            fig.savefig(f"{root}/figures-and-data/lattice_vectors.png", dpi=600)
 
-
-    def sexy_orbital_plot(self, dos, ylim=None, species=None, xlim=None):
+    def sexy_orbital_plot(self, dos_list, norm=False, ylim=None, species=None, xlim=None, yticks=None):
         '''Get element DOS and plot according to whether
             the element is a metal, chalcogen, or organic.
             Axes are scaled automatically according to the range
             of energies and densities. '''
         path = self.path
         savefig = self.savefig
-        zero_to_efermi = dos.zero_at_efermi 
+        zero_to_efermi = dos_list[0].zero_at_efermi 
 
-        fuck, ax = plt.subplots(1, figsize=(6,4), dpi=600)
+        fuck = plt.figure(figsize=(8,3), dpi=600)
+        gs = fuck.add_gridspec(1,2, wspace=0)
+        ax = gs.subplots(sharey=True)
+        
+        max_list, min_list = [], []
+        for i, dos in enumerate(dos_list):
+            # getting normalization shit
+            for orb in dos.get_dos_dict():
+                x = dos.get_dos_dict()[orb]['densities']['1']
+                max_list.append(max(x))
+                min_list.append(min(x))
 
-        colors = [ "#8A2BE2",'#0269fa', "#FF1493"]
-        markers = ["o", "^", "."]
-        lw = [3,2,1]
-        cunt = 0
         ylims = []
-        for orb in dos.get_dos_dict():
-            y = dos.get_dos_dict()[orb]['densities']['1']
-            x =  dos.get_dos_dict()[orb]['energies']
-            ylims.append(max(y))
-            ax.plot(x, y, label=orb, c=colors[cunt], marker=markers[cunt], markersize=lw[cunt]+0.5,linewidth=lw[cunt])
-            cunt += 1
-        ax.set_ylabel(r"DOS (E/eV)")
-        ax.set_xlim(xlim[0], xlim[1])
-        ylim_max = max(ylims)
-        if ylim is None:
-            ax.set_ylim(-1, ylim_max+1)
-        else:
-            ax.set_ylim(ylim)
-        ax.set_xlabel(r"Energies (eV)")
+        for i, dos in enumerate(dos_list):
+            cunt = 0
+            colors = [ "#8A2BE2",'#0269fa', "#FF1493"]
+            markers = ["o", "^", "."]
+            lw = [3,2,1]
+
+            print(min(min_list))
+
+            for orb in dos.get_dos_dict():
+                y = dos.get_dos_dict()[orb]['densities']['1']
+                x =  dos.get_dos_dict()[orb]['energies']
+                if norm and not (np.array(y) == 0).all():
+                    norm_y = [(i - min(min_list)) / (max(max_list) - min(min_list)) for i in y]
+                    y = norm_y
+                ylims.append(max(y))
+                ax[i].plot(x, y, label=orb, c=colors[cunt], marker=markers[cunt], markersize=lw[cunt]+0.5,linewidth=lw[cunt])
+                cunt += 1
+            if norm:
+                ax[0].set_ylabel(r"Normalized DOS (E/eV)")
+            else:
+                ax[0].set_ylabel(r"DOS (E/eV)")
+            # ax[i].set_ylim(xlim[0], xlim[1])
+
+            # ax[i].set_xlabel(r"Normalized DOS (E/eV)", fontsize=24)
+            if ylim is None and yticks is None:
+                ax[i].set_ylim(-0.1,max(xlim)+0.1)
+                yticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+                ax[i].set_yticks(yticks)
+                ax[i].set_yticklabels(yticks, fontsize=20)
+            elif yticks is None and ylim is not None:
+                # ax[i].set_ylim(ylim[0], ylim[1])
+                ax[i].set_ylim(ylim)
+                ax[i].set_yticklabels([round(i, 2) for i in ax[i].get_yticks()])
+            elif yticks is not None:
+                ax[i].set_yticks(yticks)
+                ax[i].set_yticklabels(yticks)
+            if ylim is not None:
+                ax[i].set_ylim(ylim)
+                # ax[i].set_ylabel(r"Energies (eV)", fontsize=24)
+            # els/e:
+            #     ax[i].set_ylim(ylim[0], ylim[1])
+            # ax[i].set_yticklabels(ax[i].get_yticks(), fontsize=20)
+
+            # ax[i].set_yticks([0.0, 0.05, 0.1, 0.15, 0.2])
+            # ylim_max = max(ylims)
+            # print(ylim_max)
+            # if ylim is None:
+            #     ax[i].set_ylim(-1, ylim_max+1)
+            #     print("yourmom")
+            #     if norm:
+            #         ax[i].set_ylim(-0.1,ylim_max+0.1)
+            # else:
+            #     ax[i].set_ylim(ylim)
+            if xlim is not None:
+                ax[i].set_xlim(xlim)
+            else:
+                pass
+            ax[i].set_xlabel(r"Energies (eV)")
+            ax[i].set_xticklabels([round(i, 2) for i in ax[i].get_xticks()])
+            ax[i].legend(loc='upper right')
             
-        # ax.grid()
-        ax.legend(loc='upper right')
+            for spine in ax[i].spines.values():
+                spine.set_linewidth(2)
 
-        for spine in ax.spines.values():
-            spine.set_linewidth(2)
-
-        # ax.legend(loc='upper right', fontsize=20)
         fuck.tight_layout()
 
         if savefig:
-            fuck.savefig(f"{path}/figures-and-data/orbital_pdos_{species}.png", dpi=600)
+            fuck.savefig(f"{path}/figures-and-data/orbital_pdos_inorganic.png", dpi=600)
 
 
     def color_bs_plotter(
@@ -607,7 +663,8 @@ class ElectronicStructurePlotter:
         xlim=None,
         ylim=None,
         smooth=False,
-        vbm_cbm_marker=True,
+        vbm_marker=True,
+        cbm_marker=True,
         smooth_tol=0,
         smooth_k=3,
         smooth_np=100,
@@ -774,11 +831,14 @@ class ElectronicStructurePlotter:
 
             vb_point, cb_point = [],[]
             # plot markers for vbm and cbm
-            if vbm_cbm_marker and data["vbm"] is not None and data["cbm"] is not None:
-                for cbm in data["cbm"]:
-                    cb_point.append([cbm[0], cbm[1]])
+            # if vbm_marker and data["vbm"] is not None:
+            if data["cbm"] is not None and data["vbm"] is not None:
                 for vbm in data["vbm"]:
                     vb_point.append([vbm[0], vbm[1]])
+            # if cbm_marker and data["cbm"] is not None:
+                for cbm in data["cbm"]:
+                    cb_point.append([cbm[0], cbm[1]])
+                
 
             # Draw Fermi energy, only if not the zero
             if not zero_to_efermi:
@@ -843,10 +903,12 @@ class ElectronicStructurePlotter:
             ax.annotate('', xy=(x_min_range+0.1,cb_point[0][1]), xytext=(x_min_range+0.1,vb_point[0][1]), arrowprops=dict(arrowstyle='<->', color='#000000', lw=3))
             ax.text(x_min_range+0.2, (cb_point[0][1]+vb_point[0][1])/2, f'{bandgap:.3f} eV', color='#666666', fontsize=20)
 
-        for c in cb_point:
-            ax.scatter(c[0], c[1], color="b", marker="o", s=100)
-        for v in vb_point:
-            ax.scatter(v[0], v[1], color="g", marker="o", s=100)
+        if cbm_marker:
+            for c in cb_point:
+                ax.scatter(c[0], c[1], color="b", marker="o", s=100)
+        if vbm_marker:
+            for v in vb_point:
+                ax.scatter(v[0], v[1], color="g", marker="o", s=100)
 
         # changing spine thickness
         for ax in [ax]:
@@ -911,8 +973,8 @@ class BandAlignment:
                 for element, value in kpoint.items():
                     if value > 0.1 and element not in max_proj:
                         max_proj[element] = (value, k_idx, band)
-                    elif value > 0.05 and element not in max_proj:
-                        max_proj[element] = (value, k_idx, band)
+                    # elif value > 0.05 and element not in max_proj:
+                    #     max_proj[element] = (value, k_idx, band)
 
         return max_proj
 
@@ -945,8 +1007,8 @@ class BandAlignment:
             if cbm > 0:  # break outer loop once found
                 break
 
-        vbm_data = self.get_max_projections(proj[Spin.up], band_gap=vbm, is_vbm=True)
-        cbm_data = self.get_max_projections(proj[Spin.up], band_gap=cbm, is_vbm=False)
+        vbm_data = self._get_max_projections(proj[Spin.up], band_gap=vbm, is_vbm=True)
+        cbm_data = self._get_max_projections(proj[Spin.up], band_gap=cbm, is_vbm=False)
 
         # Remove elements we don't care about
         for unwanted in [0]: #, 'H']:
@@ -1020,7 +1082,7 @@ class BandAlignment:
         matches = self.matches
         bs = self.bs
 
-        proj = bs._get_projection_on_elements()
+        proj = bs.get_projection_on_elements()
         vbm_shit, cbm_shit = self._get_band_proj_per_atom(matches, proj)
         vbm_gaps, cbm_gaps = self._get_band_alignment(vbm_shit, cbm_shit, bs)
 

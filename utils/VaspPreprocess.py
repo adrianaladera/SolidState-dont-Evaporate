@@ -1,9 +1,9 @@
 from utils.packages import *
 
 class VaspPreprocess:
-    def __init__(self, path, structure):
-        self.path = path
-        self.structure = structure
+    # def __init__(self, path, structure):
+    #     self.path = path
+    #     self.structure = structure
 
     def regular_kpoints(path, structure, factor=None, mesh_type=None):
         '''Create regular k-points based on the lattice vectors given 
@@ -53,15 +53,15 @@ class VaspPreprocess:
         kpoints.write_file(f"{path}/KPOINTS")
 
 
-    def band_kpoints(self, kpath_type='s',ishybrid=False, divisions=10):
+    def band_kpoints(struct, path, kpath_type='s',ishybrid=False, divisions=10):
         ''' structure - pymatgen.core.Structure object
             path - path where the band/ and scf_band/ directories
                     will be created
             ishybrid - whether or not the band calculation being
                         created will use a hybrid functional (b3lyp).
                         Defaults to False.'''
-        struct = self.structure
-        path = self.path
+        # struct = self.structure
+        # path = self.path
         spg_analy =SpacegroupAnalyzer(struct)
         prim_struct=spg_analy.get_primitive_standard_structure(international_monoclinic=False) # based off of Curtarolo convention
         pos = Poscar(prim_struct)
@@ -315,19 +315,19 @@ class VaspPreprocess:
     def run_cpu(structure, destination, hours=18, cpu=1):
         s = f'''#!/bin/bash
         
-    #SBATCH -A m4064
-    #SBATCH -N {cpu}
-    #SBATCH -c 128
-    #SBATCH -C cpu
-    #SBATCH -q regular
-    #SBATCH -t {hours}:00:00
-    #SBATCH -J {structure}
-    #SBATCH -o job.out
-    #SBATCH -e job.err
+#SBATCH -A m4064
+#SBATCH -N {cpu}
+#SBATCH -c 128
+#SBATCH -C cpu
+#SBATCH -q regular
+#SBATCH -t {hours}:00:00
+#SBATCH -J {structure}
+#SBATCH -o job.out
+#SBATCH -e job.err
 
-    module load vasp/6.4.3-cpu
+module load vasp/6.4.3-cpu
 
-    srun vasp_std'''
+srun vasp_std'''
         f = open(f"{destination}/run.slurm", 'w')
         f.write(s)
         f.close()
@@ -335,19 +335,19 @@ class VaspPreprocess:
     def run_gpu(structure, destination, hours=17, gpu=1):
         s = f'''#!/bin/bash
 
-    #SBATCH -A m4064
-    #SBATCH -q regular
-    #SBATCH -t {hours}:00:00        
-    #SBATCH -N {gpu}       
-    #SBATCH -C gpu
-    #SBATCH -c 128
-    #SBATCH -J {structure}
-    #SBATCH -o job.out
-    #SBATCH -e job.err
+#SBATCH -A m4064
+#SBATCH -q regular
+#SBATCH -t {hours}:00:00        
+#SBATCH -N {gpu}       
+#SBATCH -C gpu
+#SBATCH -c 128
+#SBATCH -J {structure}
+#SBATCH -o job.out
+#SBATCH -e job.err
 
-    module load vasp/6.4.3-gpu
+module load vasp/6.4.3-gpu
 
-    srun vasp_std '''
+srun vasp_std '''
         f = open(f"{destination}/run.slurm", 'w')
         f.write(s)
         f.close()
