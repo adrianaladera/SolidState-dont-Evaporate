@@ -1,5 +1,7 @@
 from utils.packages import *
 
+# To-Do: make ze code prettier
+
 class VaspPreprocess:
     # def __init__(self, path, structure):
     #     self.path = path
@@ -64,6 +66,16 @@ class VaspPreprocess:
         # path = self.path
         spg_analy =SpacegroupAnalyzer(struct)
         prim_struct=spg_analy.get_primitive_standard_structure(international_monoclinic=False) # based off of Curtarolo convention
+        print(f"Conventional crystal system: {spg_analy.get_crystal_system()}")
+        print(f"Conventional space group: {spg_analy.get_space_group_symbol()}")
+        print("Lattice params (vectors and angles):")
+        print(struct.lattice.abc)
+        print(struct.lattice.angles)
+        spg_analy2 = SpacegroupAnalyzer(prim_struct)
+        print(f"Primitive crystal system: {spg_analy2.get_crystal_system()}")
+        print(f"Primitive space group: {spg_analy2.get_space_group_symbol()}")
+        print(prim_struct.lattice.abc)
+        print(prim_struct.lattice.angles)
         pos = Poscar(prim_struct)
         if not os.path.exists(f"{path}/band"):
             os.mkdir(f"{path}/band")
@@ -80,18 +92,23 @@ class VaspPreprocess:
             kpath = HighSymmKpath(prim_struct) #this is the same as KPathSetyawanCurtarolo(prim_struct)
         elif x == 'h':
             kpath = KPathSeek(prim_struct)
+        elif x == 'a':
+            kpath = HighSymmKpath(prim_struct, path_type="all")
+            print(kpath.label_index)
+            print(kpath.equiv_labels)
         else:
             print("Heathen! You did not choose a method! I will choose Latimer-Munro for you.\n\n")
             kpath = KPathLatimerMunro(prim_struct)
 
         if kpath.kpath is not None:
-            kpts = Kpoints.automatic_linemode(divisions=6,ibz=kpath)
+            kpts = Kpoints.automatic_linemode(divisions=divisions,ibz=kpath)
+            # print(kpoiints)
             if ishybrid:
                 kpts.write_file(f"{path}/band/KPOINTS_OPT")
                 os.system(f"cp {path}/scf/KPOINTS {path}/band/KPOINTS")
                 print("Band KPOINTS and KPOINTS_OPT written for B3LYP functional")
             else:
-                kpts.write_file(f"{path}/band/KPOINTS")
+                kpts.write_file(f"{path}/band/KPOINTS_test")
                 print("Band KPOINTS written for default functional (PBE)")
         
         
@@ -206,26 +223,42 @@ class VaspPreprocess:
             print("Density of States INCAR written")
 
 
-    def make_potcar(path):
+    def make_potcar(path, type=None):
         '''Creates a potcar by concatenating all the pseudoponetials
             (POTCARs) of the species in the structure.
             path - path to save resulting POTCAR. POTCAR will be saved
                 to the same directory as the POSCAR.'''
         potcar_dir = "/Users/adrianaladera/Desktop/MIT/research/POTCARS_PBE.54/"
+        err = 0
 
         with open(f"{path}/POSCAR", 'r') as f:
             lines = f.readlines()
             command = "cat "
 
             for atom in lines[5].split():
-                if '/' in atom:
-                    atoms = atom.split('/')
-                    atom = str(atoms[0])
-                command += "{}{}/POTCAR ".format(potcar_dir, atom)
-            command += "> {}/POTCAR".format(path)
-            sp.call(command, shell=True)
+                # if '/' in atom:
+                #     atoms = atom.split('/')
+                #     atom = str(atoms[0])
+                if type == "gw":
+                    command += "{}{}_GW/POTCAR ".format(potcar_dir, atom)
+                else:
+                    if not os.path.exists("{}{}/POTCAR".format(potcar_dir, atom)):
+                        if not os.path.exists("{}{}_sv/POTCAR".format(potcar_dir, atom)):
+                            err = 1
+                        else:
+                            command += "{}{}_sv/POTCAR ".format(potcar_dir, atom)
+                            # print(command)
+                    else:
+                        command += "{}{}/POTCAR ".format(potcar_dir, atom)
+                        # print(command)
+            if not err:
+                command += "> {}/POTCAR".format(path)
+                print(command)
+                sp.call(command, shell=True)
+                print("POTCAR written")
+            else:
+                print("ERROR: POTCAR CANNOT BE WRITTEN. MISSING REQUIRED POTCAR FILES")
         f.close()
-        print("POTCAR written")
 
     def scf_incar(write_path, isym, lwave=False, lcharg=True, algo=None, prec=None, npar=None, ncore=None, 
                 kpar=None, lreal=None, ismear=None, sigma=None):

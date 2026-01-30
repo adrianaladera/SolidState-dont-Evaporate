@@ -4,6 +4,8 @@ from pymatgen.electronic_structure.core import Spin
 import pymatgen.electronic_structure.plotter as es
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
+# To-Do: clean up and make into prettier classes
+
 # from packages import Tools, Matplotlib, Pymatgen
 from utils.packages import * 
 
@@ -87,72 +89,94 @@ class ElectronicStructurePlotter:
         vbm_line, cbm_line = None, None
 
         ############ Plotting the DOS ############
-        # colors = ["#DC267F", "#FFB000", "#FE6100", "#648FFF", "#785EF0", "#CC0000", "#FF7F50", "#FFD700", "#008000"] # red-green colorblind friendly!
-        colors = ["#FF1493","#fc7b2b", "#FFB000",  "#8A2BE2", "#0269fa", "#e0a7fc"] # red-green colorblind friendly!
-        # colors = ["#CC0000", "#FF7F50", "#FFD700", "#008000", "#2ACAEA", "#0000FF", "#8A2BE2", '#FF1493', "#666666", "#000000"]
-        cunt = 4
+        color_list = ["#FF1493", "#FFB000","#fc7b2b", "#8A2BE2", "#0269fa", "#e0a7fc"]
 
-        # getting normalization shit
-        max_list, min_list, xlims = [], [], []
-        for orb in dos.get_dos_dict():
-            x = dos.get_dos_dict()[orb]['densities']['1']
-            max_list.append(max(x))
-            min_list.append(min(x))
-        
+        dos_dict = dos.get_dos_dict()
 
-        for orb in dos.get_dos_dict():
-            x = dos.get_dos_dict()[orb]['densities']['1']
-            # 2 * ((x - min_val) / (max_val - min_val)) - 1
-            norm_x = [(i - min(min_list)) / (max(max_list) - min(min_list)) for i in x]
-            # norm_x = [(i - max(max_list)) / (max(max_list) - min(min_list)) for i in x]
-            y =  dos.get_dos_dict()[orb]['energies']
-            if str(orb) in METALS:
-                a1.plot(norm_x, y, label=orb, c=colors[0], linewidth=4)
-            elif str(orb) in CHALCS:   
-                a1.plot(norm_x, y, label=orb, c=colors[1], linewidth=4)
-            elif str(orb) == "C":
-                a1.plot(norm_x, y, label=orb, c=colors[2], linewidth=4)
-            elif str(orb) == "H":
-                a1.plot(norm_x, y, label=orb, c=colors[3], linewidth=4)
-            else: 
-                a1.plot(norm_x, y, label=orb, c=colors[cunt], linewidth=4)
-                cunt += 1
-            xlims.append(max(norm_x))
-        print(max(xlims))
-        a1.set_xlabel(r"Normalized DOS (E/eV)", fontsize=24)
+        x_plot, y_plot, colors = {}, {}, {}
+
+        inorganics = list(set(dos_dict.keys()).intersection(set(METALS + CHALCS)))
+        organics = list(set(dos_dict.keys()) - set(inorganics))
+
+        for orb in sorted(dos_dict.keys()):
+            data = dos_dict[orb]
+            x = data["densities"]["1"]
+            y = data["energies"]
+
+            # Total DOS
+            if "Total DOS" not in x_plot:
+                x_plot["Total DOS"] = np.array(x)
+                y_plot["Total DOS"] = np.array(y)
+                colors["Total DOS"] = color_list[3]
+            else:
+                x_plot["Total DOS"] += np.array(x)
+
+            # Inorganics
+            if orb in inorganics:
+                if orb in METALS:
+                    x_plot[orb] = x
+                    y_plot[orb] = y
+                    colors[orb] = color_list[0]
+                key = "".join(sorted(inorganics))
+                x_plot[key] = x_plot.get(key, 0) + np.array(x)
+                y_plot[key] = y
+                colors[key] = color_list[2]
+
+            # Organics
+            elif orb in organics:
+                # key = "".join(organics)
+                key = "Organic"
+                x_plot[key] = x_plot.get(key, 0) + np.array(x)
+                y_plot[key] = y
+                colors[key] = color_list[1]
+
+        max_val = max([max(x_plot[orb]) for orb in x_plot])
+        min_val = min([min(x_plot[orb]) for orb in x_plot])
+
+        # Plotting
+        for orb in reversed(sorted(x_plot.keys())):
+            norm_x = [(i - min_val) / (max_val - min_val) for i in x_plot[orb]]
+            # Normalize if requested
+            if orb == "Total DOS":
+                a1.fill_between(norm_x, y_plot[orb], color=colors[orb], alpha=0.5)
+                a1.plot(norm_x, y_plot[orb],label=orb, c=colors[orb], linewidth=4, linestyle="--")
+                
+            else:
+                a1.plot(norm_x, y_plot[orb], label=orb,c=colors[orb], linewidth=4)
+
+        a1.set_xlabel(r"DOS (states/eV)", fontsize=24)
+        # a1.set_ylabel(r"Energies (eV)", fontsize=24)
+
         if dos_xlim is None and xticks is None:
-            a1.set_xlim(-0.1,max(xlims)+0.1)
+            a1.set_xlim(-0.1, 1.1)
             xticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+            # xticks = np.linspace(0, 1, 6)
+            a1.set_xticks(xticks)
+        elif dos_xlim is not None:
+            a1.set_xlim(dos_xlim)
+        if xticks is not None:
             a1.set_xticks(xticks)
             a1.set_xticklabels(xticks, fontsize=20)
-        elif xticks is None and dos_xlim is not None:
-            # a1.set_xlim(dos_xlim[0], dos_xlim[1])
-            a1.set_xlim(dos_xlim)
-            a1.set_xticklabels([round(i, 2) for i in a1.get_xticks()], fontsize=19)
-        elif xticks is not None:
-            a1.set_xticks(xticks)
-            a1.set_xticklabels(xticks, fontsize=19)
+
         if ylim is not None:
             a1.set_ylim(ylim)
-            a1.set_ylabel(r"Energies (eV)", fontsize=24)
-        # els/e:
-        #     a1.set_ylim(ylim[0], ylim[1])
-        a1.set_yticklabels(a1.get_yticks(), fontsize=20)
-        # a1.set_yticklabels(np.arange(ylim[0], ylim[1]), fontsize=20)
+            yticks = a1.get_yticks()
+            a1.set_yticklabels(yticks, fontsize=20)
 
         if not zero_to_efermi:
-            a1.axhline(y = dos.get_dos_dict()['Ag']['efermi'], color = 'r', linestyle = '--', label='$E_{Fermi}$',linewidth=1.5)
-            
-        a1.grid()
-        a1.legend(loc='upper right', fontsize=20)
+            # Example: get Fermi level from the first DOS entry
+            efermi = next(iter(dos_dict.values()))["efermi"]
+            a1.axhline(y=efermi, color="r", linestyle="--", label="$E_{Fermi}$", linewidth=1.5)
+
+        a1.grid(True)
+        a1.legend(loc="upper right", fontsize=18)
 
         ################### Plotting the band structure ###############
         elements = utils.sort_elements(f"{path}/band/POSCAR")
         inorganics = elements[0]
         organics = elements[1]
         # group_dict = [{'elements':inorganics,'color':[255, 119, 36]},{'elements':organics,'color':[0,0,0]}]
-        group_dict = [{'elements':inorganics,'color':[255, 119, 36]},{'elements':organics,'color':[0,0,0]}]
-        print(elements)
+        group_dict = [{'elements':inorganics,'color':[252, 123, 43]},{'elements':organics,'color':[0,0,0]}]
         
         if isinstance(smooth, bool):
             smooth = [smooth] * len(bandz._bs)
@@ -212,12 +236,10 @@ class ElectronicStructurePlotter:
 
             xticks = bandz.get_ticks()
             labels = xticks["label"]
-            print("BAND LABELS:")
             
             band_labels = {}
             for i, l in enumerate(labels):
                 band_labels[i] = l
-            print(band_labels)
 
             for i, sp in enumerate(bs.bands):
                 ls = "-" if str(sp) == "1" else "--"
@@ -375,6 +397,71 @@ class ElectronicStructurePlotter:
 
         return labels_list, vbm_line, cbm_line
 
+    def sexy_dosplot(self, dos):
+        fuck, a1 = plt.subplots(1, figsize=(12,8), dpi=600)
+
+      
+        color_list = ["#FF1493", "#FFB000","#fc7b2b", "#8A2BE2", "#0269fa", "#e0a7fc"]
+
+        dos_dict = dos.get_dos_dict()
+
+        x_plot, y_plot, colors = {}, {}, {}
+
+        inorganics = list(set(dos_dict.keys()).intersection(set(METALS + CHALCS)))
+        organics = list(set(dos_dict.keys()) - set(inorganics))
+
+        for orb in sorted(dos_dict.keys()):
+            data = dos_dict[orb]
+            x = data["densities"]["1"]
+            y = data["energies"]
+
+            # Total DOS
+            if "Total DOS" not in x_plot:
+                x_plot["Total DOS"] = np.array(x)
+                y_plot["Total DOS"] = np.array(y)
+                colors["Total DOS"] = color_list[3]
+            else:
+                x_plot["Total DOS"] += np.array(x)
+
+            # Inorganics
+            if orb in inorganics:
+                if orb in METALS:
+                    x_plot[orb] = x
+                    y_plot[orb] = y
+                    colors[orb] = color_list[0]
+                key = "".join(sorted(inorganics))
+                x_plot[key] = x_plot.get(key, 0) + np.array(x)
+                y_plot[key] = y
+                colors[key] = color_list[2]
+
+            # Organics
+            elif orb in organics:
+                # key = "".join(organics)
+                key = "Organic"
+                x_plot[key] = x_plot.get(key, 0) + np.array(x)
+                y_plot[key] = y
+                colors[key] = color_list[1]
+
+        # Plotting
+        for orb in reversed(sorted(x_plot.keys())):
+            # Normalize if requested
+            if orb == "Total DOS":
+                a1.fill_between(y_plot[orb], x_plot[orb], color=colors[orb], alpha=0.5)
+                a1.plot(y_plot[orb], x_plot[orb], label=orb, c=colors[orb], linewidth=4, linestyle="--")
+                
+            else:
+                a1.plot(y_plot[orb], x_plot[orb], label=orb,c=colors[orb], linewidth=4)
+
+        a1.set_xlabel(r"DOS (states/eV)", fontsize=24)
+        # a1.set_ylabel(r"Energies (eV)", fontsize=24)
+
+        a1.grid(True)
+        a1.legend(loc="upper right", fontsize=18)
+
+        if self.savefig:
+            plt.savefig(f"{self.path}/figures-and-data/dosplot.png", dpi=600, bbox_inches="tight")
+        plt.show() 
+
     def sexier_brillouin_plot(self, bsp, band_lbls, lw, fs, elev=25, azim=35, coords_are_cartesian=False):
         '''Since the plot_brillouin() from Pymatgen produces
             the ugliest plot ever this is my version of plotting
@@ -408,8 +495,6 @@ class ElectronicStructurePlotter:
             all_lines.append([kpts[start_idx].frac_coords, kpts[end_idx].frac_coords])
 
         # Selecting labels and corresponding plot coordinates
-        print(all_labels)
-
         labels = {}
         for l in band_lbls:
             for a in all_labels:
@@ -418,20 +503,14 @@ class ElectronicStructurePlotter:
                     if '\\mid' in l2:
                         for kp in l2.split('\\mid'):
                             if str(kp) == str(a) and kp not in labels.keys():
-                                # print(kp)
                                 labels[kp] = all_labels[a]
                     elif str(l2) == str(a) and l2 not in labels.keys():
-                        # print(l2)
                         labels[a] = all_labels[a]
                 elif str(l) == str(a) and l not in labels.keys():
-                    # print(l)
                     labels[a] = all_labels[a]
-
-        print(labels)
 
         # Plot Brillouin zone lattice vectors in grey
         bz_lattice = bsp._bs[0].lattice_rec
-        print(bz_lattice)
 
         vertex1 = bz_lattice.get_cartesian_coords([0.0, 0.0, 0.0])
         directions = [
@@ -531,7 +610,7 @@ class ElectronicStructurePlotter:
 
     def plot_lattice_vectors(self, real_structure, elev=25, azim=35, lims=None):
 
-        fig = plt.figure(figsize=(8,8), dpi=600)
+        fig = plt.figure(figsize=(8,8), dpi=600, lims=None)
         ax = fig.add_subplot(111, projection='3d')
         
         vertex1 = [0.0, 0.0, 0.0]
@@ -545,12 +624,9 @@ class ElectronicStructurePlotter:
             queen = ax.quiver(*vertex1, *b, color='red', alpha=0.7, linewidth=3, arrow_length_ratio=0)
         for b in prim_lattice:
             queef = ax.quiver(*vertex1, *b, color='blue', alpha=0.7, linewidth=1, arrow_length_ratio=0)
-            print(type(queef))
 
         if lims is None:
             lims = np.max(np.abs(np.concatenate(np.vstack([prim_lattice, real_lattice, recip_lattice])))) / 5
-        # lims=7
-        print(lims)
 
         # ax.quiverkey(queef, 1,1,1, "real space")
         ax.set_xlim(-lims, lims)
@@ -561,8 +637,8 @@ class ElectronicStructurePlotter:
     #         ax.axis("off")
 
         plt.show()
-        if savefig:
-            fig.savefig(f"{root}/figures-and-data/lattice_vectors.png", dpi=600)
+        if self.savefig:
+            fig.savefig(f"{self.path}/figures-and-data/lattice_vectors.png", dpi=600)
 
     def sexy_orbital_plot(self, dos_list, norm=False, ylim=None, species=None, xlim=None, yticks=None):
         '''Get element DOS and plot according to whether
@@ -591,8 +667,6 @@ class ElectronicStructurePlotter:
             colors = [ "#8A2BE2",'#0269fa', "#FF1493"]
             markers = ["o", "^", "."]
             lw = [3,2,1]
-
-            print(min(min_list))
 
             for orb in dos.get_dos_dict():
                 y = dos.get_dos_dict()[orb]['densities']['1']
@@ -624,21 +698,7 @@ class ElectronicStructurePlotter:
                 ax[i].set_yticklabels(yticks)
             if ylim is not None:
                 ax[i].set_ylim(ylim)
-                # ax[i].set_ylabel(r"Energies (eV)", fontsize=24)
-            # els/e:
-            #     ax[i].set_ylim(ylim[0], ylim[1])
-            # ax[i].set_yticklabels(ax[i].get_yticks(), fontsize=20)
-
-            # ax[i].set_yticks([0.0, 0.05, 0.1, 0.15, 0.2])
-            # ylim_max = max(ylims)
-            # print(ylim_max)
-            # if ylim is None:
-            #     ax[i].set_ylim(-1, ylim_max+1)
-            #     print("yourmom")
-            #     if norm:
-            #         ax[i].set_ylim(-0.1,ylim_max+0.1)
-            # else:
-            #     ax[i].set_ylim(ylim)
+             
             if xlim is not None:
                 ax[i].set_xlim(xlim)
             else:
@@ -700,7 +760,7 @@ class ElectronicStructurePlotter:
         elements = utils.sort_elements(f"{path}/band/POSCAR")
         inorganics = elements[0]
         organics = elements[1]
-        group_dict = [{'elements':inorganics,'color':[255, 119, 36]},{'elements':organics,'color':[0,0,0]}]
+        group_dict = [{'elements':inorganics,'color':[252, 123, 43]},{'elements':organics,'color':[0,0,0]}]
         
         if isinstance(smooth, bool):
             smooth = [smooth] * len(bandz._bs)
@@ -760,12 +820,10 @@ class ElectronicStructurePlotter:
 
             xticks = bandz.get_ticks()
             labels = xticks["label"]
-            print("BAND LABELS:")
             
             band_labels = {}
             for i, l in enumerate(labels):
                 band_labels[i] = l
-                print(i, l)
 
             for i, sp in enumerate(bs.bands):
                 ls = "-" if str(sp) == "1" else "--"

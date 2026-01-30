@@ -15,6 +15,8 @@ from ase.io import write
 import numpy as np
 import pubchempy as pcp
 
+#To-Do: make into prettier classes
+
 def remove_dupes(structure):
     '''Removes duplicates from a structure
         - structure: ase Atoms object'''
