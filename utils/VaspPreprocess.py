@@ -1,4 +1,5 @@
 from utils.packages import *
+ACCOUNT = "m5222"
 
 # To-Do: make ze code prettier
 
@@ -51,7 +52,7 @@ class VaspPreprocess:
         print("Regular KPOINTS written")
 
     def kpoints_by_density(path, structure, density=1000):
-        kpoints = Kpoints.automatic_density(structure, kppa=density)
+        kpoints = Kpoints.automatic_density(structure, kppa=density, force_gamma=True)
         kpoints.write_file(f"{path}/KPOINTS")
 
 
@@ -348,7 +349,7 @@ class VaspPreprocess:
     def run_cpu(structure, destination, hours=18, cpu=1):
         s = f'''#!/bin/bash
         
-#SBATCH -A m4064
+#SBATCH -A {ACCOUNT}
 #SBATCH -N {cpu}
 #SBATCH -c 128
 #SBATCH -C cpu
@@ -368,7 +369,7 @@ srun vasp_std'''
     def run_gpu(structure, destination, hours=17, gpu=1):
         s = f'''#!/bin/bash
 
-#SBATCH -A m4064
+#SBATCH -A {ACCOUNT}
 #SBATCH -q regular
 #SBATCH -t {hours}:00:00        
 #SBATCH -N {gpu}       
