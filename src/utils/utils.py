@@ -1,16 +1,7 @@
-from utils.packages import *
-
-# from pymatgen.core import Structure, Lattice
-# from pymatgen.electronic_structure.plotter import BSPlotter, DosPlotter
-# from pymatgen.io.vasp.outputs import BSVasprun, Vasprun
-# from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-# from pymatgen.electronic_structure.core import OrbitalType
-# import matplotlib.pyplot as plt
-# from mpl_toolkits.mplot3d import Axes3D
-# import numpy as np
-# import subprocess as sp
-# import pandas as pd
-# import os, math, re
+from pymatgen.io.vasp.outputs import BSVasprun
+import joblib
+import hashlib
+import os
 
 METALS = ['Ag', 'Au', 'Hg', 'Cu']
 CHALCS = ['Te', 'Se', "S"]
@@ -38,3 +29,19 @@ def sort_elements(poscar):
             else:
                 orgs.append(i)
     return inorgs, orgs
+
+def _get_cache_path(xml_path: str, cache_dir: str = ".cache") -> str:
+    mtime = os.path.getmtime(xml_path)
+    key = hashlib.md5(f"{xml_path}:{mtime}".encode()).hexdigest()
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, f"{key}.pkl")
+
+def load_band_structure_cached(xml_path: str, kpoints_path: str, **kwargs):
+    cache_path = _get_cache_path(xml_path)
+    if os.path.exists(cache_path):
+        return joblib.load(cache_path)
+    
+    bandrun = BSVasprun(xml_path, **kwargs)
+    bs = bandrun.get_band_structure(kpoints_path)
+    joblib.dump(bs, cache_path)
+    return bs

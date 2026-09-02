@@ -1069,7 +1069,7 @@ class BandAlignment:
         cbm_data = self._get_max_projections(proj[Spin.up], band_gap=cbm, is_vbm=False)
 
         # Remove elements we don't care about
-        for unwanted in [0]: #, 'H']:
+        for unwanted in [0, 'H']:
             vbm_data.pop(unwanted, None)
             cbm_data.pop(unwanted, None)
 
@@ -1102,7 +1102,10 @@ class BandAlignment:
 
         vbm_inorg, cbm_inorg, vbm_org, cbm_org = [], [], [], []
 
-        for atom in vbm_data:
+        common_atoms = set(vbm_data.keys()) & set(cbm_data.keys())
+
+        # for atom in vbm_data:
+        for atom in common_atoms:
             vbm_val = bs.bands[Spin.up][vbm_data[atom][2]][vbm_data[atom][1]]
             cbm_val = bs.bands[Spin.up][cbm_data[atom][2]][cbm_data[atom][1]]
             element_gaps[atom] = cbm_val - vbm_val

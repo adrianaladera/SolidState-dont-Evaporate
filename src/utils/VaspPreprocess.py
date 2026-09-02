@@ -261,7 +261,7 @@ class VaspPreprocess:
                 print("ERROR: POTCAR CANNOT BE WRITTEN. MISSING REQUIRED POTCAR FILES")
         f.close()
 
-    def scf_incar(write_path, isym, lwave=False, lcharg=True, algo=None, prec=None, npar=None, ncore=None, 
+    def scf_incar(write_path, isym, nbands=True, lwave=False, lcharg=True, algo=None, prec=None, npar=None, ncore=None, 
                 kpar=None, lreal=None, ismear=None, sigma=None):
         '''Must be called after scf is created.'''
         if os.path.exists(f"{write_path}/POTCAR"):
@@ -288,11 +288,26 @@ class VaspPreprocess:
             params["IBRION"] = -1
             params["ISYM"] = isym
 
+            # get ENMAX if needed
             command = f"grep \"ENMAX\" {write_path}/POTCAR"
             os.system(command)
             output = os.popen(command).read();
             energy_vals = [float(i) for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
             params["ENCUT"] = 1.3 * max(energy_vals)
+
+            # get NBANDS for COGITO if true
+            command = f"grep \"direct\" -B 1 {write_path}/POSCAR"
+            os.system(command)
+            output = os.popen(command).read();
+            n_atoms = np.array([float(i) for i in output.split() if i.isdigit()])
+
+            command = f"grep \"ZVAL\" {write_path}/POTCAR"
+            os.system(command)
+            output = os.popen(command).read();
+            floats = [float(i) for i in output.replace(";", "").split() if re.match(r'^-?\d+(?:\.\d+)$', i) is not None]
+            valence_vals = np.array([floats[i] for i in range(len(floats)) if i % 2])
+            params["NBANDS"] = int(3.0 * np.sum(n_atoms * valence_vals))
+            print(valence_vals, n_atoms, params["NBANDS"])
 
             incar = Incar.from_dict(params)
             incar.write_file(f"{write_path}/INCAR")
@@ -304,7 +319,7 @@ class VaspPreprocess:
 
     def relax_incar(write_path, isif, nsw, ibrion, isym, ivdw=False, lwave=False,
                 algo=None, prec=None, npar=None, ncore=None, 
-                kpar=None, lreal=None, lcharg=None, ismear=None, sigma=None):
+                kpar=None, lreal=None, lcharg=None, ismear=None, sigma=None, ispin=None, magmom=None):
         '''Must be called after scf is created.'''
         if os.path.exists(f"{write_path}/POTCAR"):
             params = {
@@ -330,6 +345,11 @@ class VaspPreprocess:
             params["NSW"] = nsw
             params["IBRION"] = ibrion
             params["ISYM"] = isym
+
+            if ispin is not None:
+                params["ISPIN"] = ispin
+            if magmom is not None: 
+                params["MAGMOM"] = magmom
 
             command = f"grep \"ENMAX\" {write_path}/POTCAR"
             os.system(command)
