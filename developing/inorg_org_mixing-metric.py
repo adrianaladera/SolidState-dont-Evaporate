@@ -50,9 +50,9 @@ MARKERS = {"2,6-dimethyl":"H",
 INORGANIC = {"Ag", "S"}  # the 1D AgS wire (element-based default)
 
 
-# --------------------------------------------------------------------------- #
+# #
 # density summation
-# --------------------------------------------------------------------------- #
+# #
 def _sum_spins(dos):
     """Sum Spin.up (+ Spin.down if present) into a single density array."""
     return sum(dos.densities.values())
@@ -84,9 +84,9 @@ def _summed_density_by_site(complete_dos, site_indices):
     return total
 
 
-# --------------------------------------------------------------------------- #
+# #
 # integration
-# --------------------------------------------------------------------------- #
+# #
 def _integrate_window(energies, density, e_lo, e_hi):
     """Trapezoidal integral over [e_lo, e_hi] with interpolated endpoints, so the
     window width is identical across structures regardless of the energy grid.
@@ -109,9 +109,9 @@ def _integrate_window(energies, density, e_lo, e_hi):
     return float(_trapz(d, e))
 
 
-# --------------------------------------------------------------------------- #
+# #
 # normalization
-# --------------------------------------------------------------------------- #
+# #
 def _zval(potcar_single):
     """Robust ZVAL (valence electrons per species) accessor."""
     if hasattr(potcar_single, "zval"):
@@ -142,9 +142,9 @@ def _norm_factors(mode, inorganic, organic, structure, potcar):
     raise ValueError(f"unknown normalize mode {mode!r}")
 
 
-# --------------------------------------------------------------------------- #
+# #
 # main whatever
-# --------------------------------------------------------------------------- #
+# #
 def mixing_metric(
     complete_dos,
     window=1.0,
@@ -160,14 +160,14 @@ def mixing_metric(
     """Inorganic-vs-organic PDOS mixing metric at the valence and conduction edges.
 
     Partitioning
-    ------------
+
     * Default: by element symbol (`inorganic` set; organic = everything else).
       Fast, but cannot separate a shared element that lives on both sublattices.
     * Site-based: pass `inorganic_sites` (indices into complete_dos.structure).
       Use this if, e.g., sulfur appears in both the wire and an organic linker.
 
     Returns
-    -------
+-
     {"valence": {...}, "conduction": {...}} with, per edge:
         E_window            (e_lo, e_hi) in absolute eV
         I_inorganic         integrated inorganic PDOS
@@ -184,7 +184,7 @@ def mixing_metric(
         vbm = vbm_auto if vbm is None else vbm
         cbm = cbm_auto if cbm is None else cbm
 
-    # --- build the two summed densities -----------------------------------
+    # build the two summed densities--
     if inorganic_sites is not None:
         inorganic_sites = list(inorganic_sites)
         n_sites = len(complete_dos.structure)
@@ -210,7 +210,7 @@ def mixing_metric(
         n_in, n_or = _norm_factors(normalize, inorganic, organic, structure, potcar)
         d_in, d_or = d_in / n_in, d_or / n_or
 
-    # --- integrate over each edge window ----------------------------------
+    # integrate over each edge window-
     windows = {
         "valence":    (vbm - window, vbm), # within 1eV of VBM
        "conduction": (cbm, cbm + window), # within 1eV of CBM
