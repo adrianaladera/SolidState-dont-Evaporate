@@ -20,7 +20,7 @@ hl_gaps = {"2,6-dimethyl":4.115,
           "2methoxy":3.773,
           "2butane":4.745,
           "2propane":4.653,
-        #   "gal-hydrated":5.189, # OUTLIER
+          "gal-hydrated":5.189, # OUTLIER
           "gal-dehydrated":4.472,
           "glu-dehydrated":5.207, 
           "glu-hydrated":4.945}
@@ -31,7 +31,7 @@ COLORS = {"2,6-dimethyl":"#FF0000",
           "2methoxy":"#B3FF00",
           "2butane":"#77FF00",
           "2propane":"#6CFF00",
-        #   "gal-hydrated":"#00FF38",
+          "gal-hydrated":"#00FF38",
           "gal-dehydrated":"#00FF38",
           "glu-dehydrated":"#00FF38",            
           "glu-hydrated":"#00E2FF"}
@@ -42,7 +42,7 @@ MARKERS = {"2,6-dimethyl":"H",
           "2methoxy":"s",
           "2butane":"p",
           "2propane":"h",
-        #   "gal-hydrated":"^",
+          "gal-hydrated":"^",
           "gal-dehydrated":"d",
           "glu-dehydrated":"D",            
           "glu-hydrated":"8"}

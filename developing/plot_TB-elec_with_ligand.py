@@ -98,12 +98,18 @@ if __name__ == "__main__":
     # panel 2: COHP_COOP.py -- integrated cross-sublattice COHP to E_F
     # =========================================================================
     cohp_vals = {}
+    rejected = []
     for key in cohp_mod.hl_gaps:
         path = f"{ROOT_COGITO}/{key}/"
         if not os.path.exists(f"{path}/tb_input.txt") and not os.path.exists(f"{path}/all_unique_bonds.json"):
-            print(f"{key} not run!")
-            cohp_mod.run_cogito(directory=path)
-            cohp_mod.run_cogito_model(dir=path)
+            try:
+                print(f"{key} not run!")
+                # cohp_mod.run_cogito(directory=path)
+                # cohp_mod.run_cogito_model(dir=path)
+            except:
+                rejected.append(key)
+                print(f"this motherfucking bitch {key} ain't working")
+
         else:
             print(key)
 
@@ -164,7 +170,7 @@ if __name__ == "__main__":
     for key in cohp_mod.hl_gaps:
         ax_cohp.scatter(cohp_mod.hl_gaps[key], cohp_vals[key],
                         color=cohp_mod.COLORS[key], marker=cohp_mod.MARKERS[key], label=key,
-                        edgecolors="black", linewidths=0.8)
+                        s=80, edgecolors="black", linewidths=0.8)
     ax_cohp.set_xlabel("HOMO-LUMO gap (eV)")
     ax_cohp.set_ylabel("Integrated cross-COHP to $E_F$")
     ax_cohp.legend(loc="best", fontsize="small")
@@ -216,8 +222,8 @@ if __name__ == "__main__":
             continue
         ax_lig.scatter(x, y, color=ligbond_mod.COLORS[lab], marker=ligbond_mod.MARKERS[lab],
                        s=80, edgecolors="black", linewidths=0.8, label=lab)
-        ax_lig.annotate(lab, (x, y), fontsize=8,
-                        textcoords="offset points", xytext=(4, 4))
+
+    ax_lig.legend(loc="best", fontsize="small")
 
     if lig_mask.sum() >= 2:
         ax_lig.text(0.05, 0.95, f"$R$ = {r_lig:.3f}\n$R^2$ = {r_lig**2:.3f}",
@@ -228,8 +234,6 @@ if __name__ == "__main__":
     ax_lig.set_xlabel("HOMO-LUMO gap (eV)")
     ax_lig.set_ylabel(f"C-S iCOHP  [{ligbond_mod.REDUCE}]  (eV)   ({sign_note})")
     ax_lig.set_title("C-S bond strength vs HOMO-LUMO gap")
-    ax_lig.axhline(0, linewidth=0.8, color="k")
-    ax_lig.grid(True, alpha=0.3)
 
     # =========================================================================
     # save combined figure
@@ -241,3 +245,6 @@ if __name__ == "__main__":
     fig.tight_layout()
     fig.savefig("TB_elec_with_ligand.png", dpi=600, bbox_inches="tight")
     plt.show()
+
+    print(rejected)
+

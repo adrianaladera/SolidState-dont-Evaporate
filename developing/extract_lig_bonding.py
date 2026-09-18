@@ -85,7 +85,7 @@ GENERATE_IF_MISSING = False   # run COGITO to build the json if it isn't there y
 # ----------------------------------------------------------------------------
 # core: read one all_unique_bonds.json -> scalar C-S bond strength
 # ----------------------------------------------------------------------------
-def cs_bond_strength(bond_json, a="C", b="S", reduce="sum", signed=True,
+def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
                      verbose=False):
     """Return a single scalar describing the a-b (default C-S) bond strength 
      or np.nan if the structure has no a-b bond in the file.
