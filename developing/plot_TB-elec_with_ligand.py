@@ -1,15 +1,19 @@
 """plot_TB-elec_with_ligand.py
 By Adriana J. Ladera
 
-Combines the three correlation plots produced separately by:
-    - inorg_org_mixing-metric.py  (inorganic/organic PDOS mixing ratio, conduction edge)
-    - COHP_COOP.py                 (integrated cross-sublattice COHP to E_F)
+Combines the correlation plots produced separately by:
+    - inorg_org_mixing-metric.py  (inorganic/organic PDOS mixing metric,
+                                    valence AND conduction band edges)
+    - COHP_COOP.py                 (integrated cross-sublattice COHP,
+                                    normalized per C-S bond, valence AND
+                                    conduction band edges)
     - extract_lig_bonding.py       (C-S iCOHP bond-strength descriptor)
 
-into a single 1x3 figure, all plotted against the HOMO-LUMO gap of the
+into a single figure, all plotted against the HOMO-LUMO gap of the
 protonated thiol ligand (gas phase). Each panel reuses the COLORS/MARKERS
 dicts, iteration scheme, and plotting instructions (scatter + black marker
-outline) from its source file.
+outline) from its source file, and calls into the current (updated) function
+signatures of those files rather than duplicating their logic.
 """
 
 import importlib.util
@@ -35,6 +39,13 @@ _mixing_spec.loader.exec_module(mixing_mod)
 ROOT_1D_RAINBOW = "/data/NFS/potato/aladera/1D_rainbow/"
 ROOT_COGITO = "/data/NFS/potato/aladera/COGITO/"
 
+# mirrors the toggles at the top of inorg_org_mixing-metric.py's __main__
+MIX_USE_COGITO = True
+MIX_METRIC_KEY = "ratio_in_over_or"   # or "ratio_in_over_or" for the legacy metric
+
+# mirrors COHP_COOP.py's cross_cohp_window(norm_mode=...)
+COHP_NORM_MODE = "s_atoms" # originally cs_bonds but whatev same number
+
 
 def _trim_orbitals(frag, avail):
     """Same trimming logic as the local `_trim` in COHP_COOP.py's __main__."""
@@ -49,138 +60,172 @@ def _trim_orbitals(frag, avail):
     return out
 
 
-if __name__ == "__main__":
-    fig, (ax_mix, ax_cohp, ax_lig) = plt.subplots(1, 3, figsize=(16, 4))
+def _mix_cdos(key):
+    """Build the CompleteDos consumed by mixing_metric(), either from a COGITO
+    TB model (default) or straight from a VASP DOS run -- same USE_COGITO
+    switch as inorg_org_mixing-metric.py's __main__.
+    """
+    if MIX_USE_COGITO:
+        path = os.path.join(ROOT_COGITO, key)
+        path += "/"
+        # if not os.path.exists(f"{path}/tb_input.txt") and not os.path.exists(f"{path}/all_unique_bonds.json"):
+        #     print(f"{key} not run!")
+        #     mixing_mod.run_cogito(directory=path)
+        #     mixing_mod.run_cogito_model(dir=path)
 
-    # =========================================================================
-    # panel 1: inorg_org_mixing-metric.py -- conduction-edge mixing ratio
-    # =========================================================================
-    mix_x, mix_y = [], []
-    for key, gap in mixing_mod.hl_gaps.items():
-        vasprun_path = os.path.join(ROOT_1D_RAINBOW, key, "dos", "vasprun.xml")
-        if not os.path.exists(vasprun_path):
-            print(f"skipping {key!r}: no vasprun.xml found at {vasprun_path}")
-            continue
-
-        vr = mixing_mod.Vasprun(vasprun_path)
-        cdos = vr.complete_dos
-        result = mixing_mod.mixing_metric(cdos)
-
-        ratio = result["conduction"]["ratio_in_over_or"]
-        mix_x.append(gap)
-        mix_y.append(ratio)
-        ax_mix.scatter(
-            gap,
-            ratio,
-            color=mixing_mod.COLORS[key],
-            marker=mixing_mod.MARKERS[key],
-            s=80,
-            edgecolors="black",
-            linewidths=0.5,
-            label=key,
-        )
-
-    ax_mix.set_title("Conduction band edge")
-    ax_mix.set_xlabel("HOMO-LUMO gap (eV)")
-    ax_mix.set_ylabel("I$_{inorganic}$ / I$_{organic}$")
-    ax_mix.legend(loc="best", fontsize="small")
-
-    if len(mix_x) >= 2:
-        r_mix = np.corrcoef(mix_x, mix_y)[0, 1]
-        ax_mix.text(
-            0.95, 0.95,
-            f"$r$ = {r_mix:.3f}\n$r^2$ = {r_mix**2:.3f}",
-            transform=ax_mix.transAxes,
-            ha="right", va="top",
-        )
-
-    # =========================================================================
-    # panel 2: COHP_COOP.py -- integrated cross-sublattice COHP to E_F
-    # =========================================================================
-    cohp_vals = {}
-    rejected = []
-    for key in cohp_mod.hl_gaps:
-        path = f"{ROOT_COGITO}/{key}/"
-        if not os.path.exists(f"{path}/tb_input.txt") and not os.path.exists(f"{path}/all_unique_bonds.json"):
-            try:
-                print(f"{key} not run!")
-                # cohp_mod.run_cogito(directory=path)
-                # cohp_mod.run_cogito_model(dir=path)
-            except:
-                rejected.append(key)
-                print(f"this motherfucking bitch {key} ain't working")
-
-        else:
-            print(key)
-
-        # 1. build the TB model from a directory that has run COGITO
-        my_CoTB = cohp_mod.CoTB(path)
+        my_CoTB = mixing_mod.CoTB(path)
         my_CoTB.normalize_params()
         my_CoTB.restrict_params(maximum_dist=15, minimum_value=0.00001)
 
-        # 2. k-grid: denser along the 1D chain axis
+        # denser k-grid along the 1D chain axis (shortest lattice vector)
         lengths = np.linalg.norm(my_CoTB._a, axis=1)
         base = 24.0
         suggested = tuple(max(2, int(round(base / L))) for L in lengths)
         print(f"lattice |a_i| = {np.round(lengths, 3)}  ->  suggested GRID = {suggested}")
 
-        GRID = suggested
-        uni = cohp_mod.COGITO_UNIFORM(my_CoTB, GRID)
+        uni = mixing_mod.COGITO_UNIFORM(my_CoTB, suggested)
+        return uni.get_pymatgen_completedos(uni)
 
-        # 3. band edges on the E_F=0 axis
-        vbm_rel, cbm_rel = cohp_mod.band_edges_robust(
-            uni, expected_gap=cohp_mod.elec_band_gaps.get(key)
-        )
-        print(f"VBM_rel={vbm_rel:.4f}  CBM_rel={cbm_rel:.4f}  gap={cbm_rel - vbm_rel:.4f} eV")
+    vasprun_path = os.path.join(ROOT_1D_RAINBOW, key, "dos", "vasprun.xml")
+    if not os.path.exists(vasprun_path):
+        return None
+    return mixing_mod.Vasprun(vasprun_path).complete_dos
 
-        # 4. trim fragment dicts to orbitals the basis carries
-        avail = {}
-        for oi in range(uni.num_orbs):
-            el = uni.elements[uni.orbatomnum[oi]]
-            avail.setdefault(el, set()).add(str(uni.exactorbtype[oi]))
-        print("available orbtypes:", {k: sorted(v) for k, v in avail.items()})
 
-        inorg = _trim_orbitals(cohp_mod.INORG, avail)
-        org = _trim_orbitals(cohp_mod.ORG, avail)
-        print(f"INORG used: {inorg}\nORG   used: {org}")
+if __name__ == "__main__":
+    fig = plt.figure(figsize=(11, 4.5))
+    gs = fig.add_gridspec(2, 3)
+    ax_mix_val = fig.add_subplot(gs[0, 0])
+    ax_mix_cond = fig.add_subplot(gs[1, 0])
+    ax_cohp_val = fig.add_subplot(gs[0, 1])
+    ax_cohp_cond = fig.add_subplot(gs[1, 1])
+    ax_lig = fig.add_subplot(gs[:, 2])
 
-        # 5. the metric: cross-sublattice COHP over the edge windows
-        res, _ = cohp_mod.cross_cohp_window(
-            uni, vbm_rel, cbm_rel, window=1.0, inorg=inorg, org=org,
-            max_dist=3.2, sigma=0.05, spin=0,
-        )
-        for edge, r in res.items():
-            print(f"{edge:>12}: int_COHP = {r['int_COHP']:+.4f}  window = {r['window']}")
+    # =========================================================================
+    # panel 1: inorg_org_mixing-metric.py -- valence & conduction mixing metric
+    # =========================================================================
+    mix_edge_axes = {"valence": ax_mix_val, "conduction": ax_mix_cond}
+    mix_data = {"valence": {"x": [], "y": []}, "conduction": {"x": [], "y": []}}
 
-        # 6. consistency / sign check: curve-to-E_F vs TB-matrix ICOHP
-        ic = cohp_mod.CoTB.get_ICOHP(uni, spin=0)
-        idx_in = cohp_mod.CoTB.atmorb_dict_to_ind(uni, inorg)
-        idx_or = cohp_mod.CoTB.atmorb_dict_to_ind(uni, org)
-        cross_icohp = float(ic[np.ix_(idx_in, idx_or)].sum().real)
+    mix_skipped = []
+    for key, gap in mixing_mod.hl_gaps.items():
+        print(f"hello {key} are you working")
+        try:
+            cdos = _mix_cdos(key)
+            if cdos is None:
+                print(f"skipping {key!r}: no DOS source found")
+                continue
 
-        curve_to_Ef = res["total_to_Ef"]["int_COHP"]
-        cohp_vals[key] = curve_to_Ef
-        print(f"\ntotal_to_Ef (curve)  = {curve_to_Ef:+.4f}")
-        print(f"cross ICOHP (matrix) = {cross_icohp:+.4f}")
-        if abs(cross_icohp) > 1e-9:
-            print(f"ratio (curve/matrix) = {curve_to_Ef / cross_icohp:+.3f}  "
-                  "[+1 consistent | -1 sign flip | ±2 double/half-count]")
+            result = mixing_mod.mixing_metric(
+                cdos, window=1.0, shape="tanh", interface_to="inorganic", normalize="atoms"
+            )
+        except Exception as e:
+            print(f"[skip] {key}: mixing metric failed -- {e!r}")
+            mix_skipped.append(key)
+            continue
 
-    # 7. scatter: integrated cross-COHP vs. HOMO-LUMO gap, per structure
+        for edge, ax in mix_edge_axes.items():
+            val = result[edge][MIX_METRIC_KEY]
+            mix_data[edge]["x"].append(gap)
+            mix_data[edge]["y"].append(val)
+            ax.scatter(gap, val, color=mixing_mod.COLORS[key], marker=mixing_mod.MARKERS[key],
+                       s=80, edgecolors="black", linewidths=0.5, label=key)
+
+    mix_ylabel = ("% organic character at edge" if MIX_METRIC_KEY == "pct_organic"
+                  else "I$_{inorganic}$ / I$_{organic}$")
+    for edge, ax in mix_edge_axes.items():
+        ax.set_title(f"Mixing metric -- {edge} edge", fontsize="small")
+        ax.set_xlabel("HOMO-LUMO gap (eV)")
+        ax.set_ylabel(mix_ylabel)
+
+        x, y = mix_data[edge]["x"], mix_data[edge]["y"]
+        if len(x) >= 2:
+            r = np.corrcoef(x, y)[0, 1]
+            ax.text(0.95, 0.95, f"$r$ = {r:.3f}\n$r^2$ = {r**2:.3f}",
+                    transform=ax.transAxes, ha="right", va="top", fontsize="small")
+
+    # =========================================================================
+    # panel 2: COHP_COOP.py -- cross-sublattice COHP, valence & conduction edges
+    #          (normalized per C-S bond via cohp_norm_factor)
+    # =========================================================================
+    cohp_edge_axes = {"valence": ax_cohp_val, "conduction": ax_cohp_cond}
+    cohp_edge_vals = {"valence": {}, "conduction": {}}
+    cohp_skipped = []
+
     for key in cohp_mod.hl_gaps:
-        ax_cohp.scatter(cohp_mod.hl_gaps[key], cohp_vals[key],
-                        color=cohp_mod.COLORS[key], marker=cohp_mod.MARKERS[key], label=key,
-                        s=80, edgecolors="black", linewidths=0.8)
-    ax_cohp.set_xlabel("HOMO-LUMO gap (eV)")
-    ax_cohp.set_ylabel("Integrated cross-COHP to $E_F$")
-    ax_cohp.legend(loc="best", fontsize="small")
+        path = f"{ROOT_COGITO}/{key}/"
+        # if not os.path.exists(f"{path}/tb_input.txt"):
+        #     print(f"{key} not run!")
+        #     cohp_mod.run_cogito(directory=f"{path}/")
+        #     cohp_mod.run_cogito_model(dir=f"{path}/")
+        # else:
+        #     print(key)
 
-    x_cohp = np.array([cohp_mod.hl_gaps[key] for key in cohp_mod.hl_gaps])
-    y_cohp = np.array([cohp_vals[key] for key in cohp_mod.hl_gaps])
-    r_cohp = np.corrcoef(x_cohp, y_cohp)[0, 1]
-    ax_cohp.text(0.05, 0.95, f"$R$ = {r_cohp:.3f}\n$R^2$ = {r_cohp**2:.3f}",
-                transform=ax_cohp.transAxes, ha="left", va="top", fontsize="small",
-                bbox=dict(boxstyle="round", facecolor="white", alpha=0.7))
+        try:
+            # 1. build the TB model from a directory that has run COGITO
+            my_CoTB = cohp_mod.CoTB(path)
+            my_CoTB.normalize_params()
+            my_CoTB.restrict_params(maximum_dist=15, minimum_value=0.00001)
+
+            # 2. k-grid: denser along the 1D chain axis
+            lengths = np.linalg.norm(my_CoTB._a, axis=1)
+            base = 24.0
+            GRID = tuple(max(2, int(round(base / L))) for L in lengths)
+            print(f"lattice |a_i| = {np.round(lengths, 3)}  ->  suggested GRID = {GRID}")
+            uni = cohp_mod.COGITO_UNIFORM(my_CoTB, GRID)
+
+            # 3. band edges on the E_F=0 axis
+            vbm_rel, cbm_rel = cohp_mod.band_edges_robust(
+                uni, expected_gap=cohp_mod.elec_band_gaps.get(key)
+            )
+            print(f"VBM_rel={vbm_rel:.4f}  CBM_rel={cbm_rel:.4f}  gap={cbm_rel - vbm_rel:.4f} eV")
+
+            # 4. trim fragment dicts to orbitals the basis carries
+            avail = {}
+            for oi in range(uni.num_orbs):
+                el = uni.elements[uni.orbatomnum[oi]]
+                avail.setdefault(el, set()).add(str(uni.exactorbtype[oi]))
+            print("available orbtypes:", {k: sorted(v) for k, v in avail.items()})
+
+            inorg = _trim_orbitals(cohp_mod.INORG, avail)
+            org = _trim_orbitals(cohp_mod.ORG, avail)
+            print(f"INORG used: {inorg}\nORG   used: {org}")
+
+            # 5. the metric: cross-sublattice COHP over the edge windows, normalized
+            #    by the number of C-S contacts so magnitudes are comparable across
+            #    structures (COHP_COOP.py's cohp_norm_factor)
+            res, _ = cohp_mod.cross_cohp_window(
+                uni, vbm_rel, cbm_rel, window=1.0, inorg=inorg, org=org,
+                max_dist=3.2, sigma=0.05, spin=0, norm_mode=COHP_NORM_MODE,
+            )
+            print(f"{key}: norm={res['_norm_factor']:.3f}  "
+                  f"val={res['valence']['int_COHP']:+.4f}  "
+                  f"cond={res['conduction']['int_COHP']:+.4f}")
+        except Exception as e:
+            print(f"[skip] {key}: cross-COHP build failed -- {e!r}")
+            cohp_skipped.append(key)
+            continue
+
+        cohp_edge_vals["valence"][key] = res["valence"]["int_COHP"]
+        cohp_edge_vals["conduction"][key] = res["conduction"]["int_COHP"]
+
+    for edge, ax in cohp_edge_axes.items():
+        xs, ys = [], []
+        for key in cohp_mod.hl_gaps:
+            if key not in cohp_edge_vals[edge]:
+                continue
+            x, y = cohp_mod.hl_gaps[key], cohp_edge_vals[edge][key]
+            xs.append(x); ys.append(y)
+            ax.scatter(x, y, color=cohp_mod.COLORS[key], marker=cohp_mod.MARKERS.get(key, "o"),
+                       s=80, edgecolors="black", linewidths=0.8, label=key)
+        ax.set_title(f"Cross-COHP -- {edge} edge", fontsize="small")
+        ax.set_xlabel("HOMO-LUMO gap (eV)")
+        ax.set_ylabel("Integrated cross-COHP")
+        if len(xs) >= 2:
+            r = np.corrcoef(xs, ys)[0, 1]
+            ax.text(0.05, 0.95, f"$R$ = {r:.3f}\n$R^2$ = {r**2:.3f}",
+                    transform=ax.transAxes, ha="left", va="top", fontsize="small",
+                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.7))
 
     # =========================================================================
     # panel 3: extract_lig_bonding.py -- C-S iCOHP bond-strength descriptor
@@ -223,8 +268,6 @@ if __name__ == "__main__":
         ax_lig.scatter(x, y, color=ligbond_mod.COLORS[lab], marker=ligbond_mod.MARKERS[lab],
                        s=80, edgecolors="black", linewidths=0.8, label=lab)
 
-    ax_lig.legend(loc="best", fontsize="small")
-
     if lig_mask.sum() >= 2:
         ax_lig.text(0.05, 0.95, f"$R$ = {r_lig:.3f}\n$R^2$ = {r_lig**2:.3f}",
                     transform=ax_lig.transAxes, ha="left", va="top", fontsize="small",
@@ -233,18 +276,27 @@ if __name__ == "__main__":
     sign_note = "neg = stronger bonding" if ligbond_mod.SIGNED else "pos = stronger bonding"
     ax_lig.set_xlabel("HOMO-LUMO gap (eV)")
     ax_lig.set_ylabel(f"C-S iCOHP  [{ligbond_mod.REDUCE}]  (eV)   ({sign_note})")
-    ax_lig.set_title("C-S bond strength vs HOMO-LUMO gap")
+    ax_lig.set_title("C-S bond strength vs HOMO-LUMO gap", fontsize="small")
 
     # =========================================================================
     # save combined figure
     # =========================================================================
-    for ax in (ax_mix, ax_cohp, ax_lig):
+    for ax in (ax_mix_val, ax_mix_cond, ax_cohp_val, ax_cohp_cond, ax_lig):
         for spine in ax.spines.values():
-            spine.set_linewidth(2)
+            spine.set_linewidth(1.2)
 
-    fig.tight_layout()
+    
+    fig.set_size_inches(11, 4.5, forward=True)
+    fig.tight_layout(rect=[0.13, 0, 1, 1])
+
+    handles, labels = ax_mix_val.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(0.0, 0.5),
+               fontsize="x-small", title="Mixing metric -- valence edge")
+
     fig.savefig("TB_elec_with_ligand.png", dpi=600, bbox_inches="tight")
     plt.show()
 
-    print(rejected)
-
+    if mix_skipped:
+        print(f"\nmixing panel skipped {len(mix_skipped)} structure(s): {mix_skipped}")
+    if cohp_skipped:
+        print(f"COHP panel skipped {len(cohp_skipped)} structure(s): {cohp_skipped}")

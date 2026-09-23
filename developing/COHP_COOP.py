@@ -19,7 +19,7 @@ from COGITO_dft.COGITO import run_cogito
 from COGITO_dft.COGITOpost import run_cogito_model
 from COGITO_dft.COGITOpost import COGITO_TB_Model as CoTB, COGITO_UNIFORM
 
-root = "/data/NFS/potato/aladera/COGITO/"
+root = "/data/norm_fucktorS/potato/aladera/COGITO/"
 elec_band_gaps = {"2,6-dimethyl":1.546, 
           "1naphthyl":1.735, 
           "3methoxy":1.938, 
@@ -28,8 +28,8 @@ elec_band_gaps = {"2,6-dimethyl":1.546,
           "2butane":2.175,
           "2propane":2.140,
           "gal-hydrated":2.832,
-          "gal-dehydrated":2.453,
-          "glu-dehydrated":2.478, 
+        #   "gal-dehydrated":2.453,
+        #   "glu-dehydrated":2.478, 
           "glu-hydrated":2.440}
 hl_gaps = {"2,6-dimethyl":4.115, 
           "1naphthyl":2.949, 
@@ -39,8 +39,8 @@ hl_gaps = {"2,6-dimethyl":4.115,
           "2butane":4.745,
           "2propane":4.653,
           "gal-hydrated":5.189,
-          "gal-dehydrated":4.472,
-          "glu-dehydrated":5.207, 
+        #   "gal-dehydrated":4.472,
+        #   "glu-dehydrated":5.207, 
           "glu-hydrated":4.945}
 COLORS = {"2,6-dimethyl":"#FF0000", 
           "1naphthyl":"#FFBE00", 
@@ -50,8 +50,8 @@ COLORS = {"2,6-dimethyl":"#FF0000",
           "2butane":"#77FF00",
           "2propane":"#6CFF00",
           "gal-hydrated":"#00FF38",
-          "gal-dehydrated":"#00FF38",
-          "glu-dehydrated":"#00FF38",            
+        #   "gal-dehydrated":"#00FF38",
+        #   "glu-dehydrated":"#00FF38",            
           "glu-hydrated":"#00E2FF"}
 MARKERS = {"2,6-dimethyl":"H", 
           "1naphthyl":"o", 
@@ -60,7 +60,7 @@ MARKERS = {"2,6-dimethyl":"H",
           "2methoxy":"s",
           "2butane":"p",
           "2propane":"h",
-        #   "gal-hydrated":"^",
+          "gal-hydrated":"^",
         #   "gal-dehydrated":"d",
         #   "glu-dehydrated":"D",            
           "glu-hydrated":"8"}
@@ -88,9 +88,11 @@ def band_edges_robust(uni, expected_gap=None, tol=1e-6):
               if eigs.ndim == 3 else eigs)
     ef, shift = resolve_fermi(uni) # get E_F in same ref frame as uni.eigvals
 
-    n_occ_k  = np.sum(eigs2d <= ef + tol, axis=1) # per-k occupied count at or below ef to some tol
-    n_occ    = int(np.median(n_occ_k)) # robust estimate of true occupied cunt
-    constant = bool(np.all(n_occ_k == n_occ)) # does each k have the same cunt or naw; F it metal or ef sux
+    n_occ_k   = np.sum(eigs2d <= ef + tol, axis=1)     # per-k occupied count
+    n_occ_mean = float(np.mean(n_occ_k))               # diagnostic (may be non-integer)
+    n_occ      = int(round(n_occ_mean))                # integer for band-counting index
+    constant   = bool(np.all(n_occ_k == n_occ))
+    print(f"  n_occ = {n_occ} (mean {n_occ_mean:.3f}; constant across k: {constant})")
 
     # split by max occupied set for VBM and min unoccupied cunt set for CBM
     occ, unocc = eigs2d[eigs2d <= ef + tol], eigs2d[eigs2d > ef + tol]
@@ -130,20 +132,68 @@ def _integrate_window(energies, y, e_lo, e_hi):
     ys = np.concatenate(([y_lo], Y[m], [y_hi]))
     return float(_trapz(ys, xs))
 
+def cohp_norm_factor(uni, mode="s_atoms", interface_pair=("C", "S"),
+                     max_dist=3.2, sigma=0.05, _struct_cache={}):
+    """Normalize this hoe by number of S atoms. Fuck interface pair
+        bc the C-S bond lengths vary per MOCha and I don't wanna risk
+        undercounting, besides num C-S bonds == num S atoms.
+
+    mode = "cs_bonds" : number of short A-B (C-S) contacts (< max_dist), per cell
+           "s_atoms"  : number of B-element (S) atoms
+           "atoms"    : total atoms  (Emily said prob not good wahh)
+           None       : 1.0, un-normalizied rawdogging
+    """
+    if mode is None:
+        return 1.0
+
+    key = id(uni)
+    struct = _struct_cache.get(key)
+    if struct is None:
+        cdos = COGITO_UNIFORM.get_pymatgen_completedos(uni, sigma=sigma, mulliken=True)
+        struct = cdos.structure
+        _struct_cache[key] = struct
+
+    alice, bob = interface_pair
+
+    def _sym(site):
+        return site.specie.symbol if hasattr(site, "specie") else site.species_string
+
+    if mode == "atoms":
+        return float(len(struct))
+
+    if mode == "s_atoms":
+        n = sum(1 for s in struct if _sym(s) == bob)
+        return float(max(n, 1))
+
+    # COME BACK AND MOD CODE TO GET RID OF THIS
+    if mode == "cs_bonds":
+        ass = [i for i, s in enumerate(struct) if _sym(s) == alice]
+        bitches = [i for i, s in enumerate(struct) if _sym(s) == bob]
+        n = 0
+        for i in ass:
+            for j in bitches:
+                d = struct.get_distance(i, j) 
+                if 0.1 < d < max_dist:
+                    n += 1
+        return float(max(n, 1))
+
+    raise ValueError(f"unknown norm mode {mode!r}")
+
 def cross_cohp_window(uni, vbm_rel, cbm_rel, window=1.0,
                       inorg=INORG, org=ORG,
-                      max_dist=3.2, sigma=0.05, spin=0):
-    """Inorganic<->organic pCOHP integrated over the valence and
-    conduction edge windows. vbm_rel/cbm_rel are the band edges
-    RELATIVE TO E_F (COGITO puts E_F at 0), i.e. vbm_abs - efermi.
-    3.2 Å for max dist to filter out distant enough non-interacting
-    inorg-org pairs. spin=0 bc these hoes aren't spin-polarized.
+                      max_dist=3.2, sigma=0.05, spin=0,
+                      norm_mode="s_atoms"):
+    """Inorganic-organic COHP integrated over the valence and conduction
+    edge windows. Huzz are normalized so MOChas are comparable.
     """
     energies, cohp_by_spin = COGITO_UNIFORM.get_COHP_DOS(
         uni, orbs=[inorg, org], max_dist=max_dist, sigma=sigma,
-        include_onsite=False, save_plot=False,
-    )
+        include_onsite=False, save_plot=False)
+    
     cohp = np.asarray(cohp_by_spin[spin])
+    norm_fucktor = cohp_norm_factor(uni, mode=norm_mode, interface_pair=("C", "S"),
+                          max_dist=max_dist, sigma=sigma)
+    cohp = cohp / norm_fucktor
 
     windows = {"valence":    (vbm_rel - window, vbm_rel),
                "conduction": (cbm_rel, cbm_rel + window)}
@@ -151,14 +201,15 @@ def cross_cohp_window(uni, vbm_rel, cbm_rel, window=1.0,
     for name, (lo, hi) in windows.items():
         out[name] = {"window": (float(lo), float(hi)),
                      "int_COHP": _integrate_window(energies, cohp, lo, hi)}
-    # to-E_F total for context (integrate the same curve up to 0)
     e0 = float(min(energies))
     out["total_to_Ef"] = {"window": (e0, 0.0),
                           "int_COHP": _integrate_window(energies, cohp, e0, 0.0)}
+    out["_norm_factor"] = norm_fucktor
     return out, (energies, cohp)
 
 if __name__ == "__main__":
-    cohp_vals = {}
+    edge_vals = {"valence": {}, "conduction": {}, "total_to_Ef": {}}
+
     for key in hl_gaps:
         path = f"{root}/{key}/"
         if not os.path.exists(f"{path}/tb_input.txt"):
@@ -168,89 +219,63 @@ if __name__ == "__main__":
         else:
             print(key)
 
-        # 1. build the TB model from a directory that has run COGITO-
         my_CoTB = CoTB(path)
-        my_CoTB.normalize_params()                      # precise normalization
+        my_CoTB.normalize_params()
         my_CoTB.restrict_params(maximum_dist=15, minimum_value=0.00001)
 
-        # 2. choose a k-grid: denser along the 1D chain axis
-        # k-density should scale like 1/|a_i|; the chain axis (smallest |a|) gets
-        # the most points. This prints a suggestion — set GRID explicitly and then
-        # densify until the edge-window integrals stop moving.
-        lengths = np.linalg.norm(my_CoTB._a, axis=1) # getting along shortest lat vec || to 1D chain
-        base = 24.0                                      # tune: higher = denser
-        suggested = tuple(max(2, int(round(base / L))) for L in lengths)
-        print(f"lattice |a_i| = {np.round(lengths, 3)}  ->  suggested GRID = {suggested}")
-
-        # build realspace grid
-        GRID = suggested # or hard-code to some bullshit like (2, 2, 10)
+        lengths = np.linalg.norm(my_CoTB._a, axis=1)
+        base = 24.0
+        GRID = tuple(max(2, int(round(base / L))) for L in lengths)
         uni = COGITO_UNIFORM(my_CoTB, GRID)
 
-        # 3. band edges on the E_F=0 axis (frame-aware + cross-checked)-
         vbm_rel, cbm_rel = band_edges_robust(uni, expected_gap=elec_band_gaps[key])
-        print(f"VBM_rel={vbm_rel:.4f}  CBM_rel={cbm_rel:.4f}  gap={cbm_rel-vbm_rel:.4f} eV")
 
-        # 4. trim fragment dicts to orbitals the basis carries
-        # search for all AgS (spd) and organics, but not all structures have the same orb types
-        # i.e. some projections lack N or Ag(d) or whatever
         avail = {}
         for oi in range(uni.num_orbs):
             el = uni.elements[uni.orbatomnum[oi]]
             avail.setdefault(el, set()).add(str(uni.exactorbtype[oi]))
-        print("available orbtypes:", {k: sorted(v) for k, v in avail.items()})
 
         def _trim(frag):
             out = {}
             for el, want in frag.items():
                 have = sorted(set(want) & avail.get(el, set()))
-                missing = set(want) - avail.get(el, set())
-                if have:    out[el] = have
-                if missing: print(f"  dropping {el}:{sorted(missing)} (not in basis)")
+                if have:
+                    out[el] = have
             return out
 
         inorg, org = _trim(INORG), _trim(ORG)
-        print(f"INORG used: {inorg}\nORG   used: {org}")
 
-        # 5. the metric: cross-sublattice COHP over the edge windows
         res, _ = cross_cohp_window(
             uni, vbm_rel, cbm_rel, window=1.0, inorg=inorg, org=org,
-            max_dist=3.2, sigma=0.05, spin=0,
+            max_dist=3.2, sigma=0.05, spin=0, norm_mode="cs_bonds",
         )
-        # prints valence and conduction int COHP
-        for edge, r in res.items():
-            print(f"{edge:>12}: int_COHP = {r['int_COHP']:+.4f}  window = {r['window']}")
+        for edge in ("valence", "conduction", "total_to_Ef"):
+            edge_vals[edge][key] = res[edge]["int_COHP"]
+        print(f"{key}: norm={res['_norm_factor']:.3f}  "
+              f"val={res['valence']['int_COHP']:+.4f}  "
+              f"cond={res['conduction']['int_COHP']:+.4f}")
 
-        # 6. consistency / sign check: curve-to-E_F vs TB-matrix ICOHP-
-        ic     = CoTB.get_ICOHP(uni, spin=0)
-        idx_in = CoTB.atmorb_dict_to_ind(uni, inorg)
-        idx_or = CoTB.atmorb_dict_to_ind(uni, org)
-        cross_icohp = float(ic[np.ix_(idx_in, idx_or)].sum().real)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+    for ax, edge in zip(axes, ("valence", "conduction")):
+        xs, ys = [], []
+        for key in hl_gaps:
+            if key not in edge_vals[edge]:
+                continue
+            x, y = hl_gaps[key], edge_vals[edge][key]
+            xs.append(x); ys.append(y)
+            ax.scatter(x, y, color=COLORS[key], marker=MARKERS.get(key, "o"),
+                       s=80, edgecolors="black", linewidths=0.8, label=key)
+        ax.set_title(f"{edge.capitalize()} band edge")
+        ax.set_xlabel("HOMO-LUMO gap (eV)")
+        ax.set_ylabel("Integrated cross-COHP (per C-S bond)")
+        if len(xs) >= 2:
+            r = np.corrcoef(xs, ys)[0, 1]
+            ax.text(0.05, 0.95, f"$R$ = {r:.3f}\n$R^2$ = {r**2:.3f}",
+                    transform=ax.transAxes, ha="left", va="top",
+                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.7))
 
-        curve_to_Ef = res["total_to_Ef"]["int_COHP"]
-        cohp_vals[key] = curve_to_Ef
-        print(f"\ntotal_to_Ef (curve)  = {curve_to_Ef:+.4f}") # the actual ICOHP val
-        print(f"cross ICOHP (matrix) = {cross_icohp:+.4f}")
-        if abs(cross_icohp) > 1e-9:
-            print(f"ratio (curve/matrix) = {curve_to_Ef/cross_icohp:+.3f}  "
-                "[+1 consistent | -1 sign flip | ±2 double/half-count]")
-
-    # 7. scatter: integrated cross-COHP vs. HOMO-LUMO gap, per structure--
-    fig, ax = plt.subplots()
-    for key in hl_gaps:
-        ax.scatter(hl_gaps[key], cohp_vals[key],
-                   color=COLORS[key], marker=MARKERS[key], label=key,
-                   edgecolors="black", linewidths=0.8)
-    ax.set_xlabel("HOMO-LUMO gap (eV)")
-    ax.set_ylabel("Integrated cross-COHP to $E_F$")
-    ax.legend(loc="best", fontsize="small")
-
-    x = np.array([hl_gaps[key] for key in hl_gaps])
-    y = np.array([cohp_vals[key] for key in hl_gaps])
-    r = np.corrcoef(x, y)[0, 1]
-    ax.text(0.05, 0.95, f"$R$ = {r:.3f}\n$R^2$ = {r**2:.3f}",
-            transform=ax.transAxes, ha="left", va="top", fontsize="small",
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.7))
-
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5))
     fig.tight_layout()
-    fig.savefig(os.path.join(root, "cohp_vs_hlgap.png"), dpi=600)
-
+    fig.savefig(os.path.join(root, "cohp_edges_vs_hlgap.png"), dpi=600, bbox_inches="tight")
+    plt.show()

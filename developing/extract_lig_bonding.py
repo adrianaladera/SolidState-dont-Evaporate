@@ -33,9 +33,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# ----------------------------------------------------------------------------
 # data location + HOMO-LUMO gaps
-# ----------------------------------------------------------------------------
 root = "/data/NFS/potato/aladera/COGITO/"
 
 hl_gaps = {
@@ -47,11 +45,12 @@ hl_gaps = {
     "2butane":        4.745,
     "2propane":       4.653,
     "gal-hydrated": 5.189,   
-    "gal-dehydrated": 4.472,
-    "glu-dehydrated": 5.207,
+    # "gal-dehydrated": 4.472,
+    # "glu-dehydrated": 5.207,
     "glu-hydrated":   4.945,
 }
-COLORS = {"2,6-dimethyl":"#FF0000", 
+COLORS = {
+        "2,6-dimethyl":"#FF0000", 
           "1naphthyl":"#FFBE00", 
           "3methoxy":"#FFE200", 
           "2MMB":"#FCFF00", 
@@ -59,10 +58,11 @@ COLORS = {"2,6-dimethyl":"#FF0000",
           "2butane":"#77FF00",
           "2propane":"#6CFF00",
           "gal-hydrated":"#00FF38",
-          "gal-dehydrated":"#00FF38",
-          "glu-dehydrated":"#00FF38",            
+        #   "gal-dehydrated":"#00FF38",
+        #   "glu-dehydrated":"#00FF38",            
           "glu-hydrated":"#00E2FF"}
-MARKERS = {"2,6-dimethyl":"H", 
+MARKERS = {
+        "2,6-dimethyl":"H", 
           "1naphthyl":"o", 
           "3methoxy":"v", 
           "2MMB":"*", 
@@ -70,25 +70,26 @@ MARKERS = {"2,6-dimethyl":"H",
           "2butane":"p",
           "2propane":"h",
           "gal-hydrated":"^",
-          "gal-dehydrated":"d",
-          "glu-dehydrated":"D",            
+        #   "gal-dehydrated":"d",
+        #   "glu-dehydrated":"D",            
           "glu-hydrated":"8"}
 
-# ----------------------------------------------------------------------------
 # tuning shit
-# ----------------------------------------------------------------------------
 REDUCE = "nn"    # "sum" | "mean" | "nn"
 SIGNED = True     # True -> negative = bonding ;  False -> positive = stronger
 GENERATE_IF_MISSING = False   # run COGITO to build the json if it isn't there yet
 
 
-# ----------------------------------------------------------------------------
 # core: read one all_unique_bonds.json -> scalar C-S bond strength
-# ----------------------------------------------------------------------------
 def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
                      verbose=False):
     """Return a single scalar describing the a-b (default C-S) bond strength 
      or np.nan if the structure has no a-b bond in the file.
+    
+        a: atom A
+        b: atom B
+        reduce: "nn" nearest neigbussy, "sum" total a-b bonding per unit cell,
+                "mean" degeneracy-weighted mean per bond
     """
     with open(bond_json, "r") as f:
         bonds = json.load(f)
@@ -104,7 +105,6 @@ def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
         deg = info.get("degeneracy", 1.0)
         dist = info.get("bond length",
                         float(parts[2]) if len(parts) > 2 else np.nan)
-
         dists.append(dist)
         cohps.append(cohp)
         degs.append(deg)
@@ -125,16 +125,17 @@ def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
     elif reduce == "mean":    # degeneracy-weighted mean per bond
         val = np.sum(cohps * degs) / np.sum(degs)
     elif reduce == "nn":      # nearest-neighbour (shortest) bond only, per bond
-        val = cohps[np.argmin(dists)]
+        finite = np.isfinite(dists)
+        if not finite.any():
+            return np.nan
+        val = cohps[finite][np.argmin(dists[finite])]
     else:
         raise ValueError(f"unknown reduce={reduce!r}")
 
     return val if signed else -val
 
 
-# ----------------------------------------------------------------------------
 # optional func to build all_unique_bonds.json via COGITO if it's missing
-# ----------------------------------------------------------------------------
 def ensure_bond_json(dir_, **cogito_kwargs):
     path = os.path.join(dir_, "all_unique_bonds.json")
     if os.path.isfile(path):
@@ -146,9 +147,6 @@ def ensure_bond_json(dir_, **cogito_kwargs):
 
 
 if __name__ == "__main__":
-    # ------------------------------------------------------------------------
-    # main: one scalar per MOCha, aligned with the gaps
-    # ------------------------------------------------------------------------
     labels, gaps, cs = [], [], []
 
     for key, gap in hl_gaps.items():
@@ -184,9 +182,9 @@ if __name__ == "__main__":
         r = np.corrcoef(gaps[mask], cs[mask])[0, 1]
         print(f"\nPearson r (gap vs C-S {REDUCE}) = {r:+.3f}")
 
-    # ------------------------------------------------------------------------
+
     # plot C-S bond strength vs HOMO-LUMO gap
-    # ------------------------------------------------------------------------
+
     fig, ax = plt.subplots(figsize=(7.5, 5.5))
 
     for x, y, lab in zip(gaps, cs, labels):
