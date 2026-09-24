@@ -88,9 +88,9 @@ def band_edges_robust(uni, expected_gap=None, tol=1e-6):
               if eigs.ndim == 3 else eigs)
     ef, shift = resolve_fermi(uni) # get E_F in same ref frame as uni.eigvals
 
-    n_occ_k   = np.sum(eigs2d <= ef + tol, axis=1)     # per-k occupied count
-    n_occ_mean = float(np.mean(n_occ_k))               # diagnostic (may be non-integer)
-    n_occ      = int(round(n_occ_mean))                # integer for band-counting index
+    n_occ_k   = np.sum(eigs2d <= ef + tol, axis=1) # per-k occupied count
+    n_occ_mean = float(np.mean(n_occ_k)) # diagnostic (may be non-integer)
+    n_occ      = int(round(n_occ_mean)) # integer for band-counting index
     constant   = bool(np.all(n_occ_k == n_occ))
     print(f"  n_occ = {n_occ} (mean {n_occ_mean:.3f}; constant across k: {constant})")
 
@@ -98,8 +98,8 @@ def band_edges_robust(uni, expected_gap=None, tol=1e-6):
     occ, unocc = eigs2d[eigs2d <= ef + tol], eigs2d[eigs2d > ef + tol]
     vbm_abs, cbm_abs = float(occ.max()), float(unocc.min())     # Fermi-split
     # or band counting to get BG w/o ref to ef (just needs occupied count)
-    s = np.sort(eigs2d, axis=1)
-    vbm_bc, cbm_bc = float(s[:, n_occ - 1].max()), float(s[:, n_occ].min())  # count
+    # s = np.sort(eigs2d, axis=1)
+    # vbm_bc, cbm_bc = float(s[:, n_occ - 1].max()), float(s[:, n_occ].min())  # count
 
     vbm_rel, cbm_rel = vbm_abs - ef, cbm_abs - ef # shift
     gap = cbm_rel - vbm_rel
@@ -107,7 +107,7 @@ def band_edges_robust(uni, expected_gap=None, tol=1e-6):
     print(f"  eigvals range : [{eigs2d.min():.3f}, {eigs2d.max():.3f}] (shifted)")
     print(f"  E_F (eig frame) = {ef:.4f}  [uni.efermi={uni.efermi:.4f} + shift={shift:.4f}]")
     print(f"  n_occ = {n_occ}  (constant across k: {constant})")
-    print(f"  gap: fermi-split = {gap:.4f} eV | band-count = {cbm_bc - vbm_bc:.4f} eV")
+    # print(f"  gap: fermi-split = {gap:.4f} eV | band-count = {cbm_bc - vbm_bc:.4f} eV")
 
     # check to see if this shit matches the actual electronic band gap from DFT
     if not constant:
@@ -138,8 +138,7 @@ def cohp_norm_factor(uni, mode="s_atoms", interface_pair=("C", "S"),
         bc the C-S bond lengths vary per MOCha and I don't wanna risk
         undercounting, besides num C-S bonds == num S atoms.
 
-    mode = "cs_bonds" : number of short A-B (C-S) contacts (< max_dist), per cell
-           "s_atoms"  : number of B-element (S) atoms
+    mode = "s_atoms"  : number of B-element (S) atoms
            "atoms"    : total atoms  (Emily said prob not good wahh)
            None       : 1.0, un-normalizied rawdogging
     """
@@ -160,24 +159,11 @@ def cohp_norm_factor(uni, mode="s_atoms", interface_pair=("C", "S"),
 
     if mode == "atoms":
         return float(len(struct))
-
     if mode == "s_atoms":
         n = sum(1 for s in struct if _sym(s) == bob)
         return float(max(n, 1))
 
-    # COME BACK AND MOD CODE TO GET RID OF THIS
-    if mode == "cs_bonds":
-        ass = [i for i, s in enumerate(struct) if _sym(s) == alice]
-        bitches = [i for i, s in enumerate(struct) if _sym(s) == bob]
-        n = 0
-        for i in ass:
-            for j in bitches:
-                d = struct.get_distance(i, j) 
-                if 0.1 < d < max_dist:
-                    n += 1
-        return float(max(n, 1))
-
-    raise ValueError(f"unknown norm mode {mode!r}")
+    raise ValueError(f"HELLO POOKIE unknown norm mode {mode!r}")
 
 def cross_cohp_window(uni, vbm_rel, cbm_rel, window=1.0,
                       inorg=INORG, org=ORG,
@@ -186,10 +172,13 @@ def cross_cohp_window(uni, vbm_rel, cbm_rel, window=1.0,
     """Inorganic-organic COHP integrated over the valence and conduction
     edge windows. Huzz are normalized so MOChas are comparable.
     """
+
+    # use COGITO_UNIFORM COHP to get COHP stuff
     energies, cohp_by_spin = COGITO_UNIFORM.get_COHP_DOS(
         uni, orbs=[inorg, org], max_dist=max_dist, sigma=sigma,
         include_onsite=False, save_plot=False)
-    
+
+    # normalize (default: num S atomussies)
     cohp = np.asarray(cohp_by_spin[spin])
     norm_fucktor = cohp_norm_factor(uni, mode=norm_mode, interface_pair=("C", "S"),
                           max_dist=max_dist, sigma=sigma)
@@ -197,6 +186,8 @@ def cross_cohp_window(uni, vbm_rel, cbm_rel, window=1.0,
 
     windows = {"valence":    (vbm_rel - window, vbm_rel),
                "conduction": (cbm_rel, cbm_rel + window)}
+
+    # TO-DO: Should I also be using some exp / tanh weight for the integrate window?
     out = {}
     for name, (lo, hi) in windows.items():
         out[name] = {"window": (float(lo), float(hi)),
@@ -223,6 +214,7 @@ if __name__ == "__main__":
         my_CoTB.normalize_params()
         my_CoTB.restrict_params(maximum_dist=15, minimum_value=0.00001)
 
+        # choose k-grid getting along shortest lat vec || to 1D chain
         lengths = np.linalg.norm(my_CoTB._a, axis=1)
         base = 24.0
         GRID = tuple(max(2, int(round(base / L))) for L in lengths)

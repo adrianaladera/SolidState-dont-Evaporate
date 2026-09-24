@@ -94,14 +94,15 @@ def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
     with open(bond_json, "r") as f:
         bonds = json.load(f)
 
+    # get all C-S cohp, degeneracies, and bond lengths from JSON file
     dists, cohps, degs = [], [], []
     for name, info in bonds.items():
         parts = name.split()
         e1, e2 = parts[0], parts[1]
-        if {e1, e2} != {a, b}:
+        if {e1, e2} != {a, b}: # only store C-S bonds
             continue
 
-        cohp = info["cohp"]                       # iCOHP, eV per bond
+        cohp = info["cohp"] # iCOHP, eV per bond
         deg = info.get("degeneracy", 1.0)
         dist = info.get("bond length",
                         float(parts[2]) if len(parts) > 2 else np.nan)
@@ -120,11 +121,11 @@ def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
         for d, c, g in sorted(zip(dists, cohps, degs)):
             print(f"      {a}-{b}  d={d:6.2f} A   iCOHP={c:+.4f} eV/bond   x{g:g}")
 
-    if reduce == "sum":       # total a-b bonding per unit cell
+    if reduce == "sum": # total a-b bonding per unit cell (gives shit correl, probably counting all C-S interactions?)
         val = np.sum(cohps * degs)
-    elif reduce == "mean":    # degeneracy-weighted mean per bond
+    elif reduce == "mean": # mean per bond weighted by num degenerussies
         val = np.sum(cohps * degs) / np.sum(degs)
-    elif reduce == "nn":      # nearest-neighbour (shortest) bond only, per bond
+    elif reduce == "nn": # nearest-neighbor (shortest) bond only, per bond
         finite = np.isfinite(dists)
         if not finite.any():
             return np.nan
@@ -133,7 +134,6 @@ def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
         raise ValueError(f"unknown reduce={reduce!r}")
 
     return val if signed else -val
-
 
 # optional func to build all_unique_bonds.json via COGITO if it's missing
 def ensure_bond_json(dir_, **cogito_kwargs):

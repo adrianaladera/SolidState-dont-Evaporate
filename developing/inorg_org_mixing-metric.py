@@ -13,6 +13,8 @@ from pymatgen.electronic_structure.dos import add_densities
 from COGITO_dft.COGITO import run_cogito
 from COGITO_dft.COGITOpost import run_cogito_model
 from COGITO_dft.COGITOpost import COGITO_TB_Model as CoTB, COGITO_UNIFORM
+from pymatgen.io.vasp.outputs import Vasprun 
+
 
 _trapz = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
 TAG = "_no-outlier"
@@ -74,21 +76,10 @@ def _integrate_window(energies, density, e_lo, e_hi):
     # window bounds for either VBM or CBM
     d_lo = np.interp(e_lo, energies, density)
     d_hi = np.interp(e_hi, energies, density)
-    mask = (energies > e_lo) & (energies < e_hi)
+    mask = (energies > e_lo) & (energies < e_hi) # filter out energies outside of range
     e = np.concatenate(([e_lo], energies[mask], [e_hi]))
     d = np.concatenate(([d_lo], density[mask], [d_hi]))
     return float(_trapz(d, e))
-
-
-# normalization
-def _zval(potcar_single):
-    """Robust ZVAL (valence electrons per species) accessor."""
-    if hasattr(potcar_single, "zval"):
-        return float(potcar_single.zval)
-    if hasattr(potcar_single, "nelectrons"):
-        return float(potcar_single.nelectrons)
-    return float(potcar_single.keywords["ZVAL"])
-
 
 # smooth band-edge weighting (replaces the hard 1 eV step window)
 def _edge_weight(energies, edge, kind, width=1.0, shape="tanh"):
@@ -114,11 +105,15 @@ def _edge_weight(energies, edge, kind, width=1.0, shape="tanh"):
     else:
         raise ValueError("kind must be 'valence' or 'conduction'")
 
-    if shape == "exp":
+    if shape == "exp": # exp decay further from the band edge
+        # d=0 -> exp(0)=1, full weight, less further from band edge
         w = np.where(d >= 0.0, np.exp(-d / width), 0.0)
     elif shape == "tanh":
+        # tan range [-1,1] --> 1-tanh range [2,0] * 0.5 = [1,0]
         w = 0.5 * (1.0 - np.tanh((d - width) / (0.5 * width)))
-        w = np.where(d >= -0.25 * width, w, 0.0)   # kill wrong-side leakage
+        # since tan never really 0/1, .042069 arbitrary hard cutoff for 
+        # 0.042069 beyond width, then force 0
+        w = np.where(d >= -0.042069 * width, w, 0.0)   # kill wrong-side leakage
     else:
         raise ValueError("Sorry brother bear, shape must be 'tanh' or 'exp'")
     return w
@@ -128,12 +123,11 @@ def _weighted_integral(energies, density, edge, kind, width=1.0, shape="tanh"):
     """Trapezoidal integral of density times the smooth edge weight."""
     e = np.asarray(energies, dtype=float)
     order = np.argsort(e)
-    e_s = e[order]
-    y_s = (np.asarray(density, dtype=float) * _edge_weight(e, edge, kind, width, shape))[order]
+    e_s = e[order] # energies
+    y_s = (np.asarray(density, dtype=float) * _edge_weight(e, edge, kind, width, shape))[order] # densities
     return float(_trapz(y_s, e_s))
 
 
-# density summation
 def _sum_spins(dos):
     """Sum Spin.up (+ Spin.down if present) into one density array."""
     return sum(dos.densities.values())
@@ -172,6 +166,7 @@ def partition_sites(structure, inorganic_elements=INORGANIC,
 
 def _summed_density_by_site(complete_dos, site_indices):
     """Sum spin channels over an explicit set of site indices.
+    Currently splitting sum by inorganic sum and organic sum.
     """
     structure = complete_dos.structure
     total = None
@@ -181,7 +176,7 @@ def _summed_density_by_site(complete_dos, site_indices):
             dens = _sum_spins(complete_dos.get_site_dos(site))
         else:
             site_pdos = complete_dos.pdos[i]
-            per_orbital = functools.reduce(add_densities, site_pdos.values())
+            per_orbital = functools.reduce(add_densities, site_pdos.values()) # reduce by adding
             dens = _sum_spins_dict(per_orbital)
         total = dens if total is None else total + dens
     if total is None:
@@ -194,7 +189,6 @@ def _sum_spins_dict(densities):
     return sum(densities.values())
 
 
-# main whatever
 def mixing_metric(
     complete_dos,
     window=1.0,
@@ -203,7 +197,7 @@ def mixing_metric(
     cbm=None,
     inorganic_elements=INORGANIC,
     interface_element="S",
-    interface_to="organic",    # where the thiolate S goes; see partition_sites
+    interface_to="inorganic",    # where the thiolate S goes; see partition_sites
     inorganic_sites=None,      # fill in if you wanna override the interface bs
     organic_sites=None,
     normalize="atoms",         # "atoms" | None  (cancels in the ratio; matters for %)
@@ -226,7 +220,7 @@ def mixing_metric(
         vbm = vbm_auto if vbm is None else vbm
         cbm = cbm_auto if cbm is None else cbm
 
-    # choose site partition
+    # choose site partition (split inorg vs. org)
     if inorganic_sites is None:
         inorganic_sites, organic_sites = partition_sites(
             structure, inorganic_elements, interface_element, interface_to
@@ -235,6 +229,7 @@ def mixing_metric(
         allset = set(range(len(structure)))
         organic_sites = sorted(allset - set(inorganic_sites))
 
+    # sum by inorganic and organic
     d_in = _summed_density_by_site(complete_dos, inorganic_sites)
     d_or = _summed_density_by_site(complete_dos, organic_sites)
 
@@ -243,7 +238,7 @@ def mixing_metric(
         d_in = d_in / max(len(inorganic_sites), 1)
         d_or = d_or / max(len(organic_sites), 1)
     elif normalize is not None:
-        raise ValueError("normalize must be 'atoms' or None with a site partition")
+        raise ValueError("Hi pookie, normalize must be 'atoms' or None with a site partition")
 
     edges = {"valence": ("valence", vbm), "conduction": ("conduction", cbm)}
     out = {}
@@ -253,6 +248,7 @@ def mixing_metric(
             I_in = _integrate_window(energies, d_in, e_lo, e_hi)
             I_or = _integrate_window(energies, d_or, e_lo, e_hi)
         else:
+            # apply a weight (exp / tan) the further you get from band edge
             I_in = _weighted_integral(energies, d_in, edge, kind, window, shape)
             I_or = _weighted_integral(energies, d_or, edge, kind, window, shape)
         tot = I_in + I_or
@@ -267,10 +263,8 @@ def mixing_metric(
     return out
 
 if __name__ == "__main__":
-    from pymatgen.io.vasp.outputs import Vasprun  # keep for the VASP path
-
     USE_COGITO = True     # flip to compare VASP vs COGITO projections
-    METRIC_KEY = "pct_organic"   # or "ratio_in_over_or" for the legacy plot
+    METRIC_KEY = "pct_organic"   # or "ratio_in_over_or" for ratio
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 5))
     edge_axes = {"valence": axes[0], "conduction": axes[1]}
@@ -288,10 +282,10 @@ if __name__ == "__main__":
             my_CoTB.normalize_params()                      # precise normalization
             my_CoTB.restrict_params(maximum_dist=15, minimum_value=0.00001)
             
-                    # 2. choose a k-grid: denser along the 1D chain axis
-                    # k-density should scale like 1/|a_i|; the chain axis (smallest |a|) gets
-                    # the most points. This prints a suggestion — set GRID explicitly and then
-                    # densify until the edge-window integrals stop moving.
+            # 2. choose a k-grid: denser along the 1D chain axis
+            # k-density should scale like 1/|a_i|; the chain axis (smallest |a|) gets
+            # the most points. This prints a suggestion — set GRID explicitly and then
+            # densify until the edge-window integrals stop moving.
             lengths = np.linalg.norm(my_CoTB._a, axis=1) # getting along shortest lat vec || to 1D chain
             base = 24.0                                      # tune: higher = denser
             suggested = tuple(max(2, int(round(base / L))) for L in lengths)

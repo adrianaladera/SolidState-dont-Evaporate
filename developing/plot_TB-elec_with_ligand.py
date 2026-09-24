@@ -93,7 +93,7 @@ def _mix_cdos(key):
 
 
 if __name__ == "__main__":
-    fig = plt.figure(figsize=(11, 4.5))
+    fig = plt.figure(figsize=(11, 5.5))
     gs = fig.add_gridspec(2, 3)
     ax_mix_val = fig.add_subplot(gs[0, 0])
     ax_mix_cond = fig.add_subplot(gs[1, 0])
