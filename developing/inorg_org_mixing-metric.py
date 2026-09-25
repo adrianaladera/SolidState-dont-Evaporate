@@ -124,8 +124,9 @@ def _weighted_integral(energies, density, edge, kind, width=1.0, shape="tanh"):
     e = np.asarray(energies, dtype=float)
     order = np.argsort(e)
     e_s = e[order] # energies
-    y_s = (np.asarray(density, dtype=float) * _edge_weight(e, edge, kind, width, shape))[order] # densities
-    return float(_trapz(y_s, e_s))
+    w = _edge_weight(e, edge, kind, width, shape)
+    y_s = np.asarray(density, dtype=float)[order] # densities
+    return float(_trapz(y_s*w, e_s))
 
 
 def _sum_spins(dos):
@@ -235,6 +236,9 @@ def mixing_metric(
 
     if normalize == "atoms":
         # cancels in the ratio, but makes I_in / I_or comparable in the % metric
+        # if nornamizing within a window, need to normalize by number of points
+        # that are within this window only (is points the number of sites? what 
+        # counts as a "site" in this instance?)
         d_in = d_in / max(len(inorganic_sites), 1)
         d_or = d_or / max(len(organic_sites), 1)
     elif normalize is not None:

@@ -44,8 +44,10 @@ MIX_USE_COGITO = True
 MIX_METRIC_KEY = "ratio_in_over_or"   # or "ratio_in_over_or" for the legacy metric
 
 # mirrors COHP_COOP.py's cross_cohp_window(norm_mode=...)
-COHP_NORM_MODE = "s_atoms" # originally cs_bonds but whatev same number
+COHP_NORM_MODE = "window" # originally cs_bonds but whatev same number
 
+# TAG = "_Em-mod2_elec"
+TAG = "_Em-mod2_HL"
 
 def _trim_orbitals(frag, avail):
     """Same trimming logic as the local `_trim` in COHP_COOP.py's __main__."""
@@ -154,12 +156,6 @@ if __name__ == "__main__":
 
     for key in cohp_mod.hl_gaps:
         path = f"{ROOT_COGITO}/{key}/"
-        # if not os.path.exists(f"{path}/tb_input.txt"):
-        #     print(f"{key} not run!")
-        #     cohp_mod.run_cogito(directory=f"{path}/")
-        #     cohp_mod.run_cogito_model(dir=f"{path}/")
-        # else:
-        #     print(key)
 
         try:
             # 1. build the TB model from a directory that has run COGITO
@@ -197,6 +193,7 @@ if __name__ == "__main__":
             res, _ = cohp_mod.cross_cohp_window(
                 uni, vbm_rel, cbm_rel, window=1.0, inorg=inorg, org=org,
                 max_dist=3.2, sigma=0.05, spin=0, norm_mode=COHP_NORM_MODE,
+                shape="tanh",
             )
             print(f"{key}: norm={res['_norm_factor']:.3f}  "
                   f"val={res['valence']['int_COHP']:+.4f}  "
@@ -286,14 +283,14 @@ if __name__ == "__main__":
             spine.set_linewidth(1.2)
 
     
-    fig.set_size_inches(11, 4.5, forward=True)
+    fig.set_size_inches(12, 4.5, forward=True)
     fig.tight_layout(rect=[0.13, 0, 1, 1])
 
     handles, labels = ax_mix_val.get_legend_handles_labels()
     fig.legend(handles, labels, loc="center left", bbox_to_anchor=(0.0, 0.5),
-               fontsize="x-small", title="Mixing metric -- valence edge")
+               fontsize="x-small")
 
-    fig.savefig("TB_elec_with_ligand.png", dpi=600, bbox_inches="tight")
+    fig.savefig(f"TB_elec_with_ligand{TAG}.png", dpi=600, bbox_inches="tight")
     plt.show()
 
     if mix_skipped:

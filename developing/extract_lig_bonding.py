@@ -125,6 +125,7 @@ def cs_bond_strength(bond_json, a="C", b="S", reduce="nn", signed=True,
         val = np.sum(cohps * degs)
     elif reduce == "mean": # mean per bond weighted by num degenerussies
         val = np.sum(cohps * degs) / np.sum(degs)
+        # do smallest ones plus some tolerance window (20% of current C-S bond you're looking at)
     elif reduce == "nn": # nearest-neighbor (shortest) bond only, per bond
         finite = np.isfinite(dists)
         if not finite.any():
